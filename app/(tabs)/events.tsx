@@ -1,4 +1,4 @@
-// app/screens/HomeScreen.tsx
+// app/screens/EventsScreen.tsx
 import React from 'react';
 import { View, Text, ScrollView, SafeAreaView, StyleSheet } from 'react-native';
 
@@ -7,7 +7,7 @@ export default function EventsScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollView}>
         <View style={styles.content}>
-          <Text style={styles.text}>Home Screen</Text>
+          <Text style={styles.text}>Events Screen</Text>
           {/* Add more content here */}
         </View>
       </ScrollView>
