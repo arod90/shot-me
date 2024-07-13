@@ -53,6 +53,11 @@ export default function SignInScreen() {
     setIsFormValid(isValid);
   };
 
+  // Add this function
+  const handleForgotPassword = () => {
+    router.push('/forgot-password');
+  };
+
   const onSignInPress = async () => {
     setShowErrors(true);
     validateForm();
@@ -127,6 +132,12 @@ export default function SignInScreen() {
               {showErrors && passwordError ? (
                 <Text style={styles.errorText}>{passwordError}</Text>
               ) : null}
+              <TouchableOpacity
+                onPress={handleForgotPassword}
+                style={styles.forgotPasswordContainer}
+              >
+                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+              </TouchableOpacity>
             </View>
             <TouchableOpacity
               onPress={onSignInPress}
@@ -212,5 +223,13 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     backgroundColor: '#4c51bf80', // Add some transparency to show it's disabled
+  },
+  forgotPasswordContainer: {
+    alignSelf: 'flex-end',
+    marginTop: 8,
+  },
+  forgotPasswordText: {
+    color: '#4c51bf',
+    fontSize: 14,
   },
 });

@@ -7,7 +7,7 @@ export default function EventsScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollView}>
         <View style={styles.content}>
-          <Text style={styles.text}>Events Screen</Text>
+          <Text style={styles.text}>My Tickets</Text>
           {/* Add more content here */}
         </View>
       </ScrollView>

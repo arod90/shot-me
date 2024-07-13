@@ -1,7 +1,6 @@
-// app/_layout.js
 import React from 'react';
 import { ClerkProvider, ClerkLoaded, useAuth } from '@clerk/clerk-expo';
-import { Slot, useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { View, ActivityIndicator } from 'react-native';
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
@@ -31,7 +30,7 @@ function RootLayoutNav() {
       if (isSignedIn) {
         router.replace('/(tabs)');
       } else {
-        router.replace('/sign-in');
+        router.replace('/(auth)/sign-in');
       }
     }
   }, [isSignedIn, isLoaded]);
@@ -40,13 +39,25 @@ function RootLayoutNav() {
     return <LoadingScreen />;
   }
 
-  return <Slot />;
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen
+        name="event-detail"
+        options={{
+          presentation: 'modal',
+          animation: 'slide_from_right',
+        }}
+      />
+    </Stack>
+  );
 }
 
 const LoadingScreen = () => {
   return (
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-      <ActivityIndicator size="large" color="#0000ff" />
+      <ActivityIndicator size="large" />
     </View>
   );
 };
