@@ -8,8 +8,8 @@ import {
   StyleSheet,
   SafeAreaView,
 } from 'react-native';
-import { supabase } from '@/supabase';
-import { useRouter } from 'expo-router';
+import { supabase } from '../../supabase';
+import { Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import {
   useFonts,
@@ -19,7 +19,7 @@ import {
 
 export default function EventsScreen() {
   const [events, setEvents] = useState([]);
-  const router = useRouter();
+
   let [fontsLoaded] = useFonts({
     Oswald_600SemiBold,
     BebasNeue_400Regular,
@@ -31,7 +31,7 @@ export default function EventsScreen() {
 
   async function fetchEvents() {
     try {
-      let { data: Events, error } = await supabase.from('Events').select('*');
+      let { data: Events, error } = await supabase.from('events').select('*');
       if (error) throw error;
       setEvents(Events || []);
     } catch (error) {
@@ -39,31 +39,25 @@ export default function EventsScreen() {
     }
   }
 
-  const handleEventPress = (event) => {
-    // Navigate immediately
-    router.push(`/event-detail?id=${event.id}`);
-  };
-
   const renderEvent = ({ item }) => (
-    <TouchableOpacity
-      style={styles.eventItem}
-      onPress={() => handleEventPress(item)}
-    >
-      <Text style={styles.eventDate}>
-        {new Date(item.event_date)
-          .toLocaleDateString('en-US', {
-            weekday: 'short',
-            month: 'short',
-            day: 'numeric',
-          })
-          .toUpperCase()}
-      </Text>
-      <Text style={styles.eventName}>{item.event_name.toUpperCase()}</Text>
-      <View style={styles.locationContainer}>
-        <Ionicons name="location-outline" size={24} color="#E53935" />
-        <Text style={styles.eventLocation}>{item.location}</Text>
-      </View>
-    </TouchableOpacity>
+    <Link href={`/event-detail/${item.id}`} asChild>
+      <TouchableOpacity style={styles.eventItem}>
+        <Text style={styles.eventDate}>
+          {new Date(item.event_date)
+            .toLocaleDateString('en-US', {
+              weekday: 'short',
+              month: 'short',
+              day: 'numeric',
+            })
+            .toUpperCase()}
+        </Text>
+        <Text style={styles.eventName}>{item.event_name.toUpperCase()}</Text>
+        <View style={styles.locationContainer}>
+          <Ionicons name="location-outline" size={20} color="#FF5252" />
+          <Text style={styles.eventLocation}>{item.location}</Text>
+        </View>
+      </TouchableOpacity>
+    </Link>
   );
 
   if (!fontsLoaded) {
@@ -77,7 +71,6 @@ export default function EventsScreen() {
         renderItem={renderEvent}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
       />
     </SafeAreaView>
   );
@@ -92,18 +85,20 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   eventItem: {
-    paddingVertical: 20, // Increased spacing between events
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333333',
   },
   eventDate: {
     fontFamily: 'BebasNeue_400Regular',
-    color: '#FF5252', // Slightly brighter red
-    fontSize: 24, // Doubled size
+    color: '#FF5252',
+    fontSize: 24,
     marginBottom: 8,
   },
   eventName: {
     fontFamily: 'Oswald_600SemiBold',
     color: '#FFFFFF',
-    fontSize: 28, // 20% larger
+    fontSize: 28,
     marginBottom: 12,
   },
   locationContainer: {
@@ -113,12 +108,7 @@ const styles = StyleSheet.create({
   eventLocation: {
     fontFamily: 'Oswald_600SemiBold',
     color: '#B0B0B0',
-    fontSize: 18, // A little bigger
+    fontSize: 18,
     marginLeft: 8,
-  },
-  separator: {
-    height: 1,
-    backgroundColor: '#333333',
-    marginVertical: 16, // Increased spacing
   },
 });

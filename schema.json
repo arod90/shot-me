@@ -1,0 +1,318 @@
+[
+  { "_comment": "---FOREIGN KEY RELATIONSHIPS---" },
+  {
+    "table_schema": "public",
+    "constraint_name": "TicketCategories_event_id_fkey",
+    "table_name": "TicketCategories",
+    "column_name": "event_id",
+    "foreign_table_name": "Events",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "constraint_name": "BarEvents_bar_id_fkey",
+    "table_name": "BarEvents",
+    "column_name": "bar_id",
+    "foreign_table_name": "Bars",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "constraint_name": "BarEvents_event_id_fkey",
+    "table_name": "BarEvents",
+    "column_name": "event_id",
+    "foreign_table_name": "Events",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "constraint_name": "UserEvents_event_id_fkey",
+    "table_name": "UserEvents",
+    "column_name": "event_id",
+    "foreign_table_name": "Events",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "constraint_name": "UserEvents_ticket_category_id_fkey",
+    "table_name": "UserEvents",
+    "column_name": "ticket_category_id",
+    "foreign_table_name": "TicketCategories",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "constraint_name": "UserEvents_user_id_fkey",
+    "table_name": "UserEvents",
+    "column_name": "user_id",
+    "foreign_table_name": "Users",
+    "foreign_column_name": "id"
+  },
+  { "_comment": "---TABLE STRUCTURE---" },
+  {
+    "table_name": "BarEvents",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "column_default": "gen_random_uuid()"
+  },
+  {
+    "table_name": "BarEvents",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "column_default": "now()"
+  },
+  {
+    "table_name": "BarEvents",
+    "column_name": "bar_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "column_default": "gen_random_uuid()"
+  },
+  {
+    "table_name": "BarEvents",
+    "column_name": "event_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "column_default": "gen_random_uuid()"
+  },
+  {
+    "table_name": "BarEvents",
+    "column_name": "attendees_count",
+    "data_type": "integer",
+    "is_nullable": "YES",
+    "column_default": "0"
+  },
+  {
+    "table_name": "Bars",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "column_default": "gen_random_uuid()"
+  },
+  {
+    "table_name": "Bars",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "column_default": "now()"
+  },
+  {
+    "table_name": "Bars",
+    "column_name": "bar_name",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": null
+  },
+  {
+    "table_name": "Events",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "column_default": "gen_random_uuid()"
+  },
+  {
+    "table_name": "Events",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "column_default": "now()"
+  },
+  {
+    "table_name": "Events",
+    "column_name": "event_name",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": null
+  },
+  {
+    "table_name": "Events",
+    "column_name": "event_date",
+    "data_type": "timestamp without time zone",
+    "is_nullable": "NO",
+    "column_default": null
+  },
+  {
+    "table_name": "Events",
+    "column_name": "image_url",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "table_name": "Events",
+    "column_name": "location",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "table_name": "TicketCategories",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "column_default": "gen_random_uuid()"
+  },
+  {
+    "table_name": "TicketCategories",
+    "column_name": "event_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "column_default": null
+  },
+  {
+    "table_name": "TicketCategories",
+    "column_name": "category_name",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": null
+  },
+  {
+    "table_name": "TicketCategories",
+    "column_name": "price",
+    "data_type": "numeric",
+    "is_nullable": "NO",
+    "column_default": null
+  },
+  {
+    "table_name": "TicketCategories",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "column_default": "now()"
+  },
+  {
+    "table_name": "UserEvents",
+    "column_name": "id",
+    "data_type": "bigint",
+    "is_nullable": "NO",
+    "column_default": null
+  },
+  {
+    "table_name": "UserEvents",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "column_default": "now()"
+  },
+  {
+    "table_name": "UserEvents",
+    "column_name": "user_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "column_default": "gen_random_uuid()"
+  },
+  {
+    "table_name": "UserEvents",
+    "column_name": "event_id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "column_default": "gen_random_uuid()"
+  },
+  {
+    "table_name": "UserEvents",
+    "column_name": "ticket_category_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "column_default": "gen_random_uuid()"
+  },
+  {
+    "table_name": "UserEvents",
+    "column_name": "status",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": "'interested'::text"
+  },
+  {
+    "table_name": "UserEvents",
+    "column_name": "ticket_id",
+    "data_type": "uuid",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "table_name": "UserEvents",
+    "column_name": "qr_code",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "table_name": "UserEvents",
+    "column_name": "purchase_date",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "table_name": "Users",
+    "column_name": "id",
+    "data_type": "uuid",
+    "is_nullable": "NO",
+    "column_default": "gen_random_uuid()"
+  },
+  {
+    "table_name": "Users",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone",
+    "is_nullable": "NO",
+    "column_default": "now()"
+  },
+  {
+    "table_name": "Users",
+    "column_name": "first_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "table_name": "Users",
+    "column_name": "last_name",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "table_name": "Users",
+    "column_name": "email",
+    "data_type": "text",
+    "is_nullable": "NO",
+    "column_default": null
+  },
+  {
+    "table_name": "Users",
+    "column_name": "date_of_birth",
+    "data_type": "date",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "table_name": "Users",
+    "column_name": "phone",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  },
+  {
+    "table_name": "Users",
+    "column_name": "events_attended",
+    "data_type": "integer",
+    "is_nullable": "YES",
+    "column_default": "0"
+  },
+  {
+    "table_name": "Users",
+    "column_name": "total_spent",
+    "data_type": "numeric",
+    "is_nullable": "YES",
+    "column_default": "'0'::numeric"
+  },
+  {
+    "table_name": "Users",
+    "column_name": "clerk_id",
+    "data_type": "text",
+    "is_nullable": "YES",
+    "column_default": null
+  }
+]
