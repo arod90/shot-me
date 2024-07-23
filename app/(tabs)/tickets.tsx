@@ -1,5 +1,5 @@
-//@ts-nocheck
-import React, { useEffect, useState, useRef } from 'react';
+// @ts-nocheck
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   ImageBackground,
   Dimensions,
   Animated,
+  ScrollView,
+  RefreshControl,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../supabase';
@@ -25,6 +27,7 @@ const CARD_COLORS = ['#E0E0E0', '#D0D0D0', '#C0C0C0', '#B0B0B0', '#A0A0A0'];
 export default function TicketsScreen() {
   const [tickets, setTickets] = useState([]);
   const [expandedTicket, setExpandedTicket] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
   const { ticketId, message } = useLocalSearchParams();
   const { userId } = useAuth();
   const animatedValues = useRef({}).current;
@@ -81,6 +84,11 @@ export default function TicketsScreen() {
       console.error('Error fetching tickets:', error);
     }
   };
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchTickets().then(() => setRefreshing(false));
+  }, []);
 
   const toggleTicket = (id) => {
     if (expandedTicket === id) {
@@ -191,13 +199,22 @@ export default function TicketsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.header}>Tickets</Text>
-      <View style={styles.ticketsContainer}>
+      <ScrollView
+        contentContainerStyle={styles.ticketsContainer}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#FF5252']} // Red spinner color
+          />
+        }
+      >
         {[...tickets]
           .reverse()
           .map((ticket, index) =>
             renderTicket(ticket, tickets.length - 1 - index)
           )}
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -215,7 +232,6 @@ const styles = StyleSheet.create({
     marginVertical: 20,
   },
   ticketsContainer: {
-    flex: 1,
     paddingHorizontal: 10,
     paddingTop: 10,
   },
