@@ -120,6 +120,7 @@ export default function TicketsScreen() {
       ]).start();
     }
   };
+
   const renderTicket = (item, index) => {
     const isExpanded = expandedTicket === item.id;
     const cardColor = CARD_COLORS[index % CARD_COLORS.length];
@@ -127,7 +128,7 @@ export default function TicketsScreen() {
     const animatedStyle = {
       height: animatedValues[item.id].interpolate({
         inputRange: [0, 1],
-        outputRange: [250, screenHeight - 180],
+        outputRange: [300, screenHeight - 180], // Adjust the initial height here
       }),
       top: animatedValues[item.id].interpolate({
         inputRange: [0, 1],
@@ -207,7 +208,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#000000',
   },
   header: {
-    fontSize: 30,
+    fontSize: 35,
     color: '#FF5252',
     fontFamily: 'Oswald_400Regular',
     textAlign: 'center',
@@ -224,6 +225,8 @@ const styles = StyleSheet.create({
     right: 10,
     borderRadius: 10,
     overflow: 'hidden',
+    // borderColor: '#A0A0A0',
+    // borderWidth: 1,
   },
   ticketHeader: {
     flexDirection: 'row',
@@ -234,12 +237,12 @@ const styles = StyleSheet.create({
     height: 80, // Increased from 70 to 80 to show more of the header
   },
   eventName: {
-    fontSize: 20,
+    fontSize: 25,
     fontFamily: 'Oswald_400Regular',
     color: '#FFFFFF',
   },
   eventDate: {
-    fontSize: 16,
+    fontSize: 18,
     fontFamily: 'Oswald_400Regular',
     color: '#FFFFFF',
     textAlign: 'right',
@@ -251,7 +254,7 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   eventLocation: {
-    fontSize: 16,
+    fontSize: 18,
     fontFamily: 'Oswald_400Regular',
     color: '#FFFFFF',
     marginLeft: 5,
