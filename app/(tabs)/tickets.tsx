@@ -5,10 +5,10 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ImageBackground,
   Dimensions,
   ScrollView,
   RefreshControl,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../supabase';
@@ -18,8 +18,6 @@ import { Oswald_400Regular, useFonts } from '@expo-google-fonts/dev';
 import { Ionicons } from '@expo/vector-icons';
 
 const screenWidth = Dimensions.get('window').width;
-
-const CARD_COLORS = ['#E0E0E0', '#D0D0D0', '#C0C0C0', '#B0B0B0', '#A0A0A0'];
 
 export default function TicketsScreen() {
   const [tickets, setTickets] = useState([]);
@@ -91,8 +89,16 @@ export default function TicketsScreen() {
     });
   };
 
+  const calculateDaysLeft = (eventDate) => {
+    const eventDateObj = new Date(eventDate);
+    const today = new Date();
+    const timeDiff = eventDateObj - today;
+    const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+    return daysDiff;
+  };
+
   const renderTicket = (item, index) => {
-    const cardColor = CARD_COLORS[index % CARD_COLORS.length];
+    const daysLeft = calculateDaysLeft(item.events.event_date);
 
     return (
       <TouchableOpacity
@@ -100,24 +106,28 @@ export default function TicketsScreen() {
         onPress={() => goToDetails(item)}
         activeOpacity={0.9}
       >
-        <View style={[styles.ticketContainer, { backgroundColor: cardColor }]}>
-          <View style={styles.ticketHeader}>
-            <Text style={styles.eventName}>{item.events.event_name}</Text>
-            <View>
-              <Text style={styles.eventDate}>
-                {new Date(item.events.event_date).toLocaleDateString()}
-              </Text>
-              <View style={styles.locationContainer}>
-                <Ionicons name="location-outline" size={20} color="#FF5252" />
-                <Text style={styles.eventLocation}>{item.events.location}</Text>
-              </View>
-            </View>
+        <View style={styles.ticketContainer}>
+          <View style={styles.grooveLeft} />
+          <View style={styles.grooveRight} />
+          <View style={styles.daysContainer}>
+            <Text style={styles.daysText}>{daysLeft} MORE DAYS</Text>
           </View>
-          <ImageBackground
-            source={{ uri: item.events.image_url }}
-            style={styles.ticketBackground}
-            imageStyle={styles.imageStyle}
-          />
+          <View style={styles.ticketContent}>
+            <View style={styles.textContainer}>
+              <Text style={styles.eventName}>{item.events.event_name}</Text>
+              <Text style={styles.eventDetails}>
+                <Text style={styles.eventDate}>
+                  {new Date(item.events.event_date).toLocaleDateString()}
+                </Text>{' '}
+                - {item.events.location}
+              </Text>
+            </View>
+            <Image
+              source={{ uri: item.events.image_url }}
+              style={styles.eventImage}
+            />
+          </View>
+          <View style={styles.dottedLine} />
         </View>
       </TouchableOpacity>
     );
@@ -165,48 +175,93 @@ const styles = StyleSheet.create({
     paddingTop: 10,
   },
   ticketContainer: {
+    backgroundColor: '#333333',
     marginBottom: 15,
-    borderRadius: 10,
+    borderRadius: 15,
     overflow: 'hidden',
+    padding: 20,
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.8,
+    shadowRadius: 2,
+    elevation: 5,
   },
-  ticketHeader: {
+  grooveLeft: {
+    position: 'absolute',
+    left: -15,
+    top: '35%',
+    width: 25,
+    height: 25,
+    backgroundColor: '#000000', // Match background to blend
+    borderTopRightRadius: 15,
+    borderBottomRightRadius: 15,
+    zIndex: 1,
+  },
+  grooveRight: {
+    position: 'absolute',
+    right: -15,
+    top: '35%',
+    width: 25,
+    height: 25,
+    backgroundColor: '#000000', // Match background to blend
+    borderTopLeftRadius: 15,
+    borderBottomLeftRadius: 15,
+    zIndex: 1,
+  },
+  daysContainer: {
+    position: 'absolute',
+    top: 10,
+    left: 20,
+    backgroundColor: '#d3d3d3',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  daysText: {
+    fontSize: 12,
+    fontFamily: 'Oswald_400Regular',
+    color: '#000000',
+  },
+  ticketContent: {
+    marginTop: 30,
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    padding: 10,
-    height: 80,
+    alignItems: 'center',
+  },
+  textContainer: {
+    flex: 1,
   },
   eventName: {
-    fontSize: 25,
+    fontSize: 20,
+    fontFamily: 'Oswald_400Regular',
+    color: '#FFFFFF',
+    marginBottom: 5,
+  },
+  eventDetails: {
+    fontSize: 16,
     fontFamily: 'Oswald_400Regular',
     color: '#FFFFFF',
   },
   eventDate: {
-    fontSize: 18,
-    fontFamily: 'Oswald_400Regular',
-    color: '#FFFFFF',
-    textAlign: 'right',
+    color: '#FF5252', // Red color for the date
   },
-  locationContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    marginTop: 5,
+  dottedLine: {
+    position: 'absolute',
+    top: '35%',
+    left: 0,
+    right: 0,
+    height: 1,
+    borderTopWidth: 1,
+    borderColor: '#FFFFFF',
+    borderStyle: 'dotted',
+    zIndex: 0,
   },
-  eventLocation: {
-    fontSize: 18,
-    fontFamily: 'Oswald_400Regular',
-    color: '#FFFFFF',
-    marginLeft: 5,
-  },
-  ticketBackground: {
-    width: '100%',
-    height: 150,
-    justifyContent: 'flex-end',
-  },
-  imageStyle: {
-    borderBottomLeftRadius: 10,
-    borderBottomRightRadius: 10,
+  eventImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+    marginLeft: 10,
   },
 });
