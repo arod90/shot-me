@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   ScrollView,
   RefreshControl,
   Image,
+  Animated,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../supabase';
@@ -24,6 +25,7 @@ export default function TicketsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const { userId } = useAuth();
   const router = useRouter();
+  const animatedValues = useRef({}).current;
 
   let [fontsLoaded] = useFonts({
     Oswald_400Regular,
@@ -32,6 +34,17 @@ export default function TicketsScreen() {
   useEffect(() => {
     fetchTickets();
   }, []);
+
+  const animateTickets = () => {
+    Object.values(animatedValues).forEach((value, index) => {
+      Animated.timing(value, {
+        toValue: 1,
+        duration: 500,
+        delay: index * 100, // Stagger effect
+        useNativeDriver: true,
+      }).start();
+    });
+  };
 
   const fetchTickets = async () => {
     if (!userId) return;
@@ -64,7 +77,17 @@ export default function TicketsScreen() {
         user_last_name: user.last_name,
       }));
 
+      // Create or reset animated values for each ticket
+      ticketsWithUserInfo.forEach((ticket) => {
+        if (!animatedValues[ticket.id]) {
+          animatedValues[ticket.id] = new Animated.Value(0);
+        } else {
+          animatedValues[ticket.id].setValue(0);
+        }
+      });
+
       setTickets(ticketsWithUserInfo);
+      animateTickets();
     } catch (error) {
       console.error('Error fetching tickets:', error);
     }
@@ -97,16 +120,29 @@ export default function TicketsScreen() {
     return daysDiff;
   };
 
-  const renderTicket = (item, index) => {
+  const renderTicket = (item) => {
     const daysLeft = calculateDaysLeft(item.events.event_date);
+    const animatedValue = animatedValues[item.id] || new Animated.Value(1);
+
+    const animatedStyle = {
+      opacity: animatedValue,
+      transform: [
+        {
+          translateX: animatedValue.interpolate({
+            inputRange: [0, 1],
+            outputRange: [50, 0], // Slide in from 50px to the right
+          }),
+        },
+      ],
+    };
 
     return (
-      <TouchableOpacity
-        key={item.id}
-        onPress={() => goToDetails(item)}
-        activeOpacity={0.9}
-      >
-        <View style={styles.ticketContainer}>
+      <Animated.View key={item.id} style={animatedStyle}>
+        <TouchableOpacity
+          onPress={() => goToDetails(item)}
+          activeOpacity={0.9}
+          style={styles.ticketContainer}
+        >
           <View style={styles.grooveLeft} />
           <View style={styles.grooveRight} />
           <View style={styles.daysContainer}>
@@ -128,8 +164,8 @@ export default function TicketsScreen() {
             />
           </View>
           <View style={styles.dottedLine} />
-        </View>
-      </TouchableOpacity>
+        </TouchableOpacity>
+      </Animated.View>
     );
   };
 
@@ -150,14 +186,13 @@ export default function TicketsScreen() {
           />
         }
       >
-        {tickets.map((ticket, index) =>
-          renderTicket(ticket, tickets.length - 1 - index)
-        )}
+        {tickets.map((ticket) => renderTicket(ticket))}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+// ... styles remain unchanged
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -193,7 +228,7 @@ const styles = StyleSheet.create({
     top: '35%',
     width: 25,
     height: 25,
-    backgroundColor: '#000000', // Match background to blend
+    backgroundColor: '#000000',
     borderTopRightRadius: 15,
     borderBottomRightRadius: 15,
     zIndex: 1,
@@ -204,7 +239,7 @@ const styles = StyleSheet.create({
     top: '35%',
     width: 25,
     height: 25,
-    backgroundColor: '#000000', // Match background to blend
+    backgroundColor: '#000000',
     borderTopLeftRadius: 15,
     borderBottomLeftRadius: 15,
     zIndex: 1,
@@ -243,7 +278,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   eventDate: {
-    color: '#FF5252', // Red color for the date
+    color: '#FF5252',
   },
   dottedLine: {
     position: 'absolute',
