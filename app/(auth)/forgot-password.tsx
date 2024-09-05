@@ -10,6 +10,7 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { useClerk } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
@@ -24,10 +25,10 @@ export default function ForgotPasswordScreen() {
 
   const validateEmail = () => {
     if (!email.trim()) {
-      setEmailError('Email is required');
+      setEmailError('El correo electrónico es obligatorio');
       return false;
     } else if (!/\S+@\S+\.\S+/.test(email)) {
-      setEmailError('Email is invalid');
+      setEmailError('El correo electrónico no es válido');
       return false;
     }
     setEmailError('');
@@ -45,8 +46,13 @@ export default function ForgotPasswordScreen() {
       });
       setResetSent(true);
     } catch (err) {
-      console.error('Error sending reset password email', err);
-      setEmailError('Error sending reset password email. Please try again.');
+      console.error(
+        'Error al enviar el correo de restablecimiento de contraseña',
+        err
+      );
+      setEmailError(
+        'Error al enviar el correo de restablecimiento. Por favor, inténtalo de nuevo.'
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -59,15 +65,21 @@ export default function ForgotPasswordScreen() {
     >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.innerContainer}>
-          <Text style={styles.headerText}>Reset Your Password</Text>
+          <Image
+            source={require('../../assets/images/logo-blanco-nombre.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+          <Text style={styles.headerText}>Restablecer tu contraseña</Text>
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email address</Text>
+            <Text style={styles.label}>Correo electrónico</Text>
             <TextInput
               autoCapitalize="none"
               value={email}
-              placeholder="Email..."
+              placeholder="Correo electrónico..."
               onChangeText={(text) => setEmail(text)}
               style={styles.input}
+              placeholderTextColor="#666"
             />
             {emailError ? (
               <Text style={styles.errorText}>{emailError}</Text>
@@ -81,19 +93,20 @@ export default function ForgotPasswordScreen() {
             {isSubmitting ? (
               <ActivityIndicator color="white" />
             ) : (
-              <Text style={styles.buttonText}>Reset Password</Text>
+              <Text style={styles.buttonText}>Restablecer Contraseña</Text>
             )}
           </TouchableOpacity>
           {resetSent && (
             <Text style={styles.successText}>
-              Check your email for the password reset link.
+              Revisa tu correo electrónico para el enlace de restablecimiento de
+              contraseña.
             </Text>
           )}
           <TouchableOpacity
             onPress={() => router.back()}
             style={styles.backButton}
           >
-            <Text style={styles.backButtonText}>Back to Sign In</Text>
+            <Text style={styles.backButtonText}>Volver a Iniciar Sesión</Text>
           </TouchableOpacity>
         </View>
       </TouchableWithoutFeedback>
@@ -101,17 +114,21 @@ export default function ForgotPasswordScreen() {
   );
 }
 
-// ... (imports remain the same)
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#292929',
+    backgroundColor: '#000000',
   },
   innerContainer: {
     flex: 1,
     justifyContent: 'center',
     padding: 16,
+  },
+  logo: {
+    width: 200,
+    height: 200,
+    alignSelf: 'center',
+    marginBottom: 20,
   },
   headerText: {
     marginBottom: 32,
@@ -130,7 +147,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   input: {
-    backgroundColor: '#434343',
+    backgroundColor: '#333',
     borderRadius: 4,
     padding: 12,
     color: 'white',
@@ -156,7 +173,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   errorText: {
-    color: 'red',
+    color: '#FF5252',
     fontSize: 12,
     marginTop: 4,
   },

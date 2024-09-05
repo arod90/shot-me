@@ -9,20 +9,29 @@ import {
   SafeAreaView,
   ScrollView,
   ActivityIndicator,
+  FlatList,
+  Dimensions,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../supabase';
 import { useAuth } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
+import Modal from 'react-native-modal';
+
+const { width } = Dimensions.get('window');
 
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
+  const { userId } = useAuth();
+
   const [event, setEvent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [interestedUsers, setInterestedUsers] = useState([]);
   const [purchasedUsers, setPurchasedUsers] = useState([]);
-  const { userId } = useAuth();
+  const [activeTab, setActiveTab] = useState('purchased');
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [isModalVisible, setModalVisible] = useState(false);
 
   useEffect(() => {
     fetchEventDetails();
@@ -55,7 +64,7 @@ export default function EventDetailScreen() {
         .select(
           `
           *,
-          users(first_name, last_name)
+          users(first_name, last_name, avatar_url, date_of_birth, events_attended)
         `
         )
         .eq('event_id', id)
@@ -68,7 +77,7 @@ export default function EventDetailScreen() {
         .select(
           `
           *,
-          users(first_name, last_name)
+          users(first_name, last_name, avatar_url, date_of_birth, events_attended)
         `
         )
         .eq('event_id', id)
@@ -89,7 +98,6 @@ export default function EventDetailScreen() {
 
   const handleInterested = async () => {
     try {
-      // Fetch the Supabase user ID using the Clerk ID
       const { data: userData, error: userError } = await supabase
         .from('users')
         .select('id')
@@ -101,7 +109,6 @@ export default function EventDetailScreen() {
         throw userError;
       }
 
-      // Check if the user already marked interest
       const { data: existingRecord, error: checkError } = await supabase
         .from('userevents')
         .select('*')
@@ -133,12 +140,82 @@ export default function EventDetailScreen() {
         );
       }
 
-      fetchUsers(); // Refresh the users list
+      fetchUsers();
     } catch (error) {
       console.error('Error marking as interested:', error);
       Alert.alert('Error', 'Unable to mark as interested');
     }
   };
+
+  const handleUserPress = (user) => {
+    setSelectedUser(user);
+    setModalVisible(true);
+  };
+
+  const renderUserItem = ({ item }) => (
+    <TouchableOpacity
+      style={styles.userItem}
+      onPress={() => handleUserPress(item.users)}
+    >
+      <Image
+        source={{
+          uri: item.users.avatar_url || 'https://via.placeholder.com/40',
+        }}
+        style={styles.userAvatar}
+      />
+      <Text style={styles.userName}>
+        {item.users.first_name} {item.users.last_name}
+      </Text>
+    </TouchableOpacity>
+  );
+
+  const renderUserModal = () => (
+    <Modal
+      isVisible={isModalVisible}
+      onSwipeComplete={() => setModalVisible(false)}
+      onBackdropPress={() => setModalVisible(false)}
+      swipeDirection={['down']}
+      style={styles.modal}
+      backdropOpacity={0.5}
+      animationIn="slideInUp"
+      animationOut="slideOutDown"
+      animationInTiming={300}
+      animationOutTiming={300}
+      backdropTransitionInTiming={300}
+      backdropTransitionOutTiming={0}
+    >
+      <View style={styles.modalContent}>
+        <View style={styles.modalHandle} />
+        <View style={styles.modalHeader}>
+          <Image
+            source={{
+              uri: selectedUser?.avatar_url || 'https://via.placeholder.com/80',
+            }}
+            style={styles.modalAvatar}
+          />
+          <Text style={styles.modalName}>
+            {selectedUser?.first_name} {selectedUser?.last_name}
+          </Text>
+        </View>
+        <View style={styles.modalInfo}>
+          <View style={styles.modalInfoItem}>
+            <Ionicons name="calendar-outline" size={24} color="#FF5252" />
+            <Text style={styles.modalInfoText}>
+              {selectedUser?.date_of_birth
+                ? new Date(selectedUser.date_of_birth).toLocaleDateString()
+                : 'N/A'}
+            </Text>
+          </View>
+          <View style={styles.modalInfoItem}>
+            <Ionicons name="ticket-outline" size={24} color="#FF5252" />
+            <Text style={styles.modalInfoText}>
+              {selectedUser?.events_attended || 0} events attended
+            </Text>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
 
   if (loading) {
     return (
@@ -154,7 +231,7 @@ export default function EventDetailScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView>
+      <ScrollView style={styles.scrollView}>
         <View style={styles.imageContainer}>
           <Image
             source={{ uri: event.image_url }}
@@ -179,21 +256,46 @@ export default function EventDetailScreen() {
             <Text style={styles.eventLocation}>{event.location}</Text>
           </View>
         </View>
-        <View style={styles.usersContainer}>
-          <Text style={styles.usersTitle}>Interested Users:</Text>
-          {interestedUsers.map((user) => (
-            <Text key={user.id} style={styles.userName}>
-              {user.users.first_name} {user.users.last_name}
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'purchased' && styles.activeTab]}
+            onPress={() => setActiveTab('purchased')}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === 'purchased' && styles.activeTabText,
+              ]}
+            >
+              Purchased
             </Text>
-          ))}
-          <Text style={styles.usersTitle}>Purchased Users:</Text>
-          {purchasedUsers.map((user) => (
-            <Text key={user.id} style={styles.userName}>
-              {user.users.first_name} {user.users.last_name}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'interested' && styles.activeTab]}
+            onPress={() => setActiveTab('interested')}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === 'interested' && styles.activeTabText,
+              ]}
+            >
+              Interested
             </Text>
-          ))}
+          </TouchableOpacity>
         </View>
+        <FlatList
+          data={activeTab === 'purchased' ? purchasedUsers : interestedUsers}
+          renderItem={renderUserItem}
+          keyExtractor={(item) => item.id}
+          ListEmptyComponent={
+            <Text style={styles.emptyListText}>No users in this category</Text>
+          }
+          style={styles.userList}
+          scrollEnabled={false}
+        />
       </ScrollView>
+
       <View style={styles.buttonContainer}>
         <TouchableOpacity style={styles.buyButton} onPress={handleBuyTicket}>
           <Text style={styles.buyButtonText}>BUY TICKET</Text>
@@ -205,6 +307,7 @@ export default function EventDetailScreen() {
           <Text style={styles.interestedButtonText}>INTERESTED</Text>
         </TouchableOpacity>
       </View>
+      {renderUserModal()}
     </SafeAreaView>
   );
 }
@@ -213,6 +316,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000000',
+  },
+  scrollView: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,
@@ -228,8 +334,8 @@ const styles = StyleSheet.create({
     fontFamily: 'Oswald_400Regular',
   },
   imageContainer: {
-    width: '100%',
-    height: 590, // Fixed height instead of percentage
+    width: width,
+    height: width,
   },
   image: {
     width: '100%',
@@ -259,6 +365,59 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#B0B0B0',
     marginLeft: 8,
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    borderBottomWidth: 1,
+    borderBottomColor: '#333333',
+  },
+  tab: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+  },
+  activeTab: {
+    borderBottomWidth: 2,
+    borderBottomColor: '#FF5252',
+  },
+  tabText: {
+    fontFamily: 'Oswald_400Regular',
+    fontSize: 18,
+    color: '#B0B0B0',
+  },
+  activeTabText: {
+    color: '#FF5252',
+  },
+  userList: {
+    flexGrow: 0,
+    marginTop: 10,
+  },
+  userItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333333',
+    height: 60,
+  },
+  userAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  userName: {
+    fontFamily: 'Oswald_400Regular',
+    color: '#FFFFFF',
+    fontSize: 18,
+  },
+  emptyListText: {
+    fontFamily: 'Oswald_400Regular',
+    color: '#B0B0B0',
+    fontSize: 16,
+    textAlign: 'center',
+    padding: 24,
   },
   buttonContainer: {
     padding: 24,
@@ -293,19 +452,43 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-  usersContainer: {
-    padding: 24,
+  modal: {
+    justifyContent: 'flex-end',
+    margin: 0,
   },
-  usersTitle: {
+  modalContent: {
+    backgroundColor: '#1A1A1A',
+    padding: 22,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  modalHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalAvatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginBottom: 10,
+  },
+  modalName: {
     fontFamily: 'Oswald_600SemiBold',
+    fontSize: 24,
     color: '#FFFFFF',
-    fontSize: 18,
-    marginBottom: 8,
   },
-  userName: {
+  modalInfo: {
+    marginTop: 10,
+  },
+  modalInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  modalInfoText: {
     fontFamily: 'Oswald_400Regular',
+    fontSize: 18,
     color: '#FFFFFF',
-    fontSize: 16,
-    marginBottom: 4,
+    marginLeft: 10,
   },
 });

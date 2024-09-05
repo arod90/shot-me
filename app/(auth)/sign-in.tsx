@@ -11,6 +11,7 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { useSignIn } from '@clerk/clerk-expo';
@@ -38,22 +39,21 @@ export default function SignInScreen() {
     setPasswordError('');
 
     if (!emailAddress.trim()) {
-      setEmailError('Email is required');
+      setEmailError('El correo electrónico es requerido');
       isValid = false;
     } else if (!/\S+@\S+\.\S+/.test(emailAddress)) {
-      setEmailError('Email is invalid');
+      setEmailError('El correo electrónico no es válido');
       isValid = false;
     }
 
     if (!password.trim()) {
-      setPasswordError('Password is required');
+      setPasswordError('La contraseña es requerida');
       isValid = false;
     }
 
     setIsFormValid(isValid);
   };
 
-  // Add this function
   const handleForgotPassword = () => {
     router.push('/forgot-password');
   };
@@ -82,16 +82,15 @@ export default function SignInScreen() {
         console.error(JSON.stringify(signInAttempt, null, 2));
       }
     } catch (err) {
-      // Handle sign-in error
       // @ts-ignore
       if (err.errors && err.errors[0].code === 'form_identifier_not_found') {
-        setPasswordError("Couldn't find your account.");
+        setPasswordError('No se pudo encontrar tu cuenta.');
         // @ts-ignore
       } else if (err.errors && err.errors[0].message) {
         // @ts-ignore
         setPasswordError(err.errors[0].message);
       } else {
-        setPasswordError('An error occurred during sign in');
+        setPasswordError('Ocurrió un error durante el inicio de sesión');
       }
     } finally {
       setIsSubmitting(false);
@@ -106,28 +105,35 @@ export default function SignInScreen() {
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <ScrollView contentContainerStyle={styles.scrollContainer}>
           <View style={styles.formContainer}>
-            <Text style={styles.headerText}>Sign in to your account</Text>
+            <Image
+              source={require('../../assets/images/logo-blanco-nombre.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            <Text style={styles.headerText}>Inicia sesión en tu cuenta</Text>
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email address</Text>
+              <Text style={styles.label}>Correo electrónico</Text>
               <TextInput
                 autoCapitalize="none"
                 value={emailAddress}
-                placeholder="Email..."
+                placeholder="Correo electrónico..."
                 onChangeText={(email) => setEmailAddress(email)}
                 style={styles.input}
+                placeholderTextColor="#666"
               />
               {showErrors && emailError ? (
                 <Text style={styles.errorText}>{emailError}</Text>
               ) : null}
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Password</Text>
+              <Text style={styles.label}>Contraseña</Text>
               <TextInput
                 value={password}
-                placeholder="Password..."
+                placeholder="Contraseña..."
                 secureTextEntry={true}
                 onChangeText={(password) => setPassword(password)}
                 style={styles.input}
+                placeholderTextColor="#666"
               />
               {showErrors && passwordError ? (
                 <Text style={styles.errorText}>{passwordError}</Text>
@@ -136,7 +142,9 @@ export default function SignInScreen() {
                 onPress={handleForgotPassword}
                 style={styles.forgotPasswordContainer}
               >
-                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                <Text style={styles.forgotPasswordText}>
+                  ¿Olvidaste tu contraseña?
+                </Text>
               </TouchableOpacity>
             </View>
             <TouchableOpacity
@@ -146,7 +154,7 @@ export default function SignInScreen() {
               {isSubmitting ? (
                 <ActivityIndicator color="white" />
               ) : (
-                <Text style={styles.buttonText}>Sign In</Text>
+                <Text style={styles.buttonText}>Iniciar Sesión</Text>
               )}
             </TouchableOpacity>
             <TouchableOpacity
@@ -154,7 +162,7 @@ export default function SignInScreen() {
               style={styles.button}
             >
               <Text style={styles.buttonText}>
-                Don't have an account? Sign Up
+                ¿No tienes una cuenta? Regístrate
               </Text>
             </TouchableOpacity>
           </View>
@@ -167,7 +175,7 @@ export default function SignInScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#292929',
+    backgroundColor: '#000000',
   },
   scrollContainer: {
     flexGrow: 1,
@@ -176,6 +184,12 @@ const styles = StyleSheet.create({
   },
   formContainer: {
     marginTop: 32,
+    alignItems: 'center',
+  },
+  logo: {
+    width: 200,
+    height: 200,
+    marginBottom: 20,
   },
   headerText: {
     marginBottom: 32,
@@ -186,6 +200,7 @@ const styles = StyleSheet.create({
   },
   inputGroup: {
     marginBottom: 16,
+    width: '100%',
   },
   label: {
     fontSize: 14,
@@ -194,13 +209,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   input: {
-    backgroundColor: '#434343',
+    backgroundColor: '#1A1A1A',
     borderRadius: 4,
     padding: 12,
     color: 'white',
     fontSize: 16,
     borderWidth: 1,
-    borderColor: '#727272',
+    borderColor: '#333',
   },
   button: {
     backgroundColor: '#FF5252',
@@ -210,6 +225,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 16,
+    width: '100%',
   },
   buttonText: {
     color: 'white',
@@ -217,12 +233,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   errorText: {
-    color: 'red',
+    color: '#FF5252',
     fontSize: 12,
     marginTop: 4,
   },
   buttonDisabled: {
-    backgroundColor: '#FF525280', // Add some transparency to show it's disabled
+    backgroundColor: '#FF525280',
   },
   forgotPasswordContainer: {
     alignSelf: 'flex-end',
