@@ -23,7 +23,7 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
 
-  console.log('User object:', user);
+  // console.log('User object:', user);
 
   useEffect(() => {
     fetchUserData();

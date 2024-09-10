@@ -1,17 +1,36 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ClerkProvider, ClerkLoaded, useAuth } from '@clerk/clerk-expo';
 import { Stack, useRouter } from 'expo-router';
 import { View, ActivityIndicator, Linking } from 'react-native';
+import LoadingScreen from '../components/LoadingScreen';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from './queryClient';
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
 export default function RootLayout() {
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
+
   return (
-    <ClerkProvider publishableKey={publishableKey}>
-      <ClerkLoaded>
-        <RootLayoutNav />
-      </ClerkLoaded>
-    </ClerkProvider>
+    <QueryClientProvider client={queryClient}>
+      <ClerkProvider publishableKey={publishableKey}>
+        <ClerkLoaded>
+          <RootLayoutNav />
+        </ClerkLoaded>
+      </ClerkProvider>
+    </QueryClientProvider>
   );
 }
 
@@ -46,14 +65,12 @@ function RootLayoutNav() {
       }
     };
 
-    // Handle the initial URL that opened the app
     Linking.getInitialURL().then((url) => {
       if (url) {
         handleDeepLink({ url });
       }
     });
 
-    // Listen for new URLs opening the app
     const subscription = Linking.addEventListener('url', handleDeepLink);
 
     return () => {
@@ -93,11 +110,3 @@ function RootLayoutNav() {
     </Stack>
   );
 }
-
-const LoadingScreen = () => {
-  return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-      <ActivityIndicator size="large" />
-    </View>
-  );
-};

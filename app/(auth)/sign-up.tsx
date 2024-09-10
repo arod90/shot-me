@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -34,8 +34,125 @@ export default function SignUpScreen() {
   const [dateOfBirth, setDateOfBirth] = useState(new Date());
   const [phone, setPhone] = useState('');
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
+  const [isEmailApproved, setIsEmailApproved] = useState(false);
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
 
-  const passwordsMatch = password === confirmPassword;
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [confirmPasswordError, setConfirmPasswordError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+  const [dateError, setDateError] = useState('');
+
+  const [touchedInputs, setTouchedInputs] = useState({
+    email: false,
+    password: false,
+    confirmPassword: false,
+    phone: false,
+    date: false,
+  });
+
+  useEffect(() => {
+    if (touchedInputs.email) validateEmail();
+  }, [emailAddress, touchedInputs.email]);
+
+  useEffect(() => {
+    if (touchedInputs.password) validatePassword();
+  }, [password, touchedInputs.password]);
+
+  useEffect(() => {
+    if (touchedInputs.confirmPassword) validateConfirmPassword();
+  }, [password, confirmPassword, touchedInputs.confirmPassword]);
+
+  useEffect(() => {
+    if (touchedInputs.phone) validatePhone();
+  }, [phone, touchedInputs.phone]);
+
+  useEffect(() => {
+    if (touchedInputs.date) validateAge();
+  }, [dateOfBirth, touchedInputs.date]);
+
+  const validateEmail = async () => {
+    if (!emailAddress.trim()) {
+      setEmailError('El correo electrónico es requerido');
+      setIsEmailApproved(false);
+      return;
+    }
+
+    if (!/\S+@\S+\.\S+/.test(emailAddress)) {
+      setEmailError('El correo electrónico no es válido');
+      setIsEmailApproved(false);
+      return;
+    }
+
+    setIsCheckingEmail(true);
+    const { data, error } = await supabase
+      .from('approved_emails')
+      .select('email')
+      .eq('email', emailAddress)
+      .single();
+
+    setIsCheckingEmail(false);
+
+    if (!error && data) {
+      setIsEmailApproved(true);
+      setEmailError('');
+    } else {
+      setIsEmailApproved(false);
+      setEmailError(
+        'Este correo electrónico no está aprobado para registrarse'
+      );
+    }
+  };
+
+  const validatePassword = () => {
+    if (!password.trim()) {
+      setPasswordError('La contraseña es requerida');
+      return;
+    }
+
+    if (!/^(?=.*[A-Za-z])(?=.*\d).{1,}$/.test(password)) {
+      setPasswordError(
+        'La contraseña debe contener al menos una letra y un número'
+      );
+      return;
+    }
+
+    setPasswordError('');
+  };
+
+  const validateConfirmPassword = () => {
+    if (password !== confirmPassword) {
+      setConfirmPasswordError('Las contraseñas no coinciden');
+    } else {
+      setConfirmPasswordError('');
+    }
+  };
+
+  const validatePhone = () => {
+    if (!/^0\d{9}$/.test(phone)) {
+      setPhoneError(
+        'El número de teléfono debe tener 10 dígitos y comenzar con 0'
+      );
+    } else {
+      setPhoneError('');
+    }
+  };
+
+  const validateAge = () => {
+    const today = new Date();
+    const birthDate = new Date(dateOfBirth);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+
+    if (age < 18) {
+      setDateError('Debes ser mayor de 18 años para registrarte');
+    } else {
+      setDateError('');
+    }
+  };
 
   const showDatePicker = () => {
     setDatePickerVisibility(true);
@@ -47,11 +164,28 @@ export default function SignUpScreen() {
 
   const handleConfirm = (date) => {
     setDateOfBirth(date);
+    setTouchedInputs((prev) => ({ ...prev, date: true }));
     hideDatePicker();
   };
 
   const onSignUpPress = async () => {
-    if (!isLoaded || !passwordsMatch) return;
+    setTouchedInputs({
+      email: true,
+      password: true,
+      confirmPassword: true,
+      phone: true,
+      date: true,
+    });
+
+    if (
+      !isLoaded ||
+      !isEmailApproved ||
+      passwordError ||
+      confirmPasswordError ||
+      phoneError ||
+      dateError
+    )
+      return;
 
     try {
       await signUp.create({
@@ -145,9 +279,24 @@ export default function SignUpScreen() {
                     value={emailAddress}
                     placeholder="Correo electrónico..."
                     onChangeText={(email) => setEmailAddress(email)}
-                    style={styles.input}
+                    onBlur={() =>
+                      setTouchedInputs((prev) => ({ ...prev, email: true }))
+                    }
+                    style={[
+                      styles.input,
+                      isEmailApproved && styles.approvedEmailInput,
+                    ]}
                     placeholderTextColor="#666"
                   />
+                  {isCheckingEmail && (
+                    <Text style={styles.checkingText}>Verificando...</Text>
+                  )}
+                  {!isCheckingEmail && isEmailApproved && (
+                    <Text style={styles.approvedText}>Close Friend</Text>
+                  )}
+                  {touchedInputs.email && emailError ? (
+                    <Text style={styles.errorText}>{emailError}</Text>
+                  ) : null}
                 </View>
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>Contraseña</Text>
@@ -156,9 +305,15 @@ export default function SignUpScreen() {
                     placeholder="Contraseña..."
                     secureTextEntry={true}
                     onChangeText={(password) => setPassword(password)}
+                    onBlur={() =>
+                      setTouchedInputs((prev) => ({ ...prev, password: true }))
+                    }
                     style={styles.input}
                     placeholderTextColor="#666"
                   />
+                  {touchedInputs.password && passwordError ? (
+                    <Text style={styles.errorText}>{passwordError}</Text>
+                  ) : null}
                 </View>
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>Confirmar Contraseña</Text>
@@ -169,19 +324,18 @@ export default function SignUpScreen() {
                     onChangeText={(confirmPass) =>
                       setConfirmPassword(confirmPass)
                     }
-                    style={[
-                      styles.input,
-                      !passwordsMatch &&
-                        confirmPassword !== '' &&
-                        styles.inputError,
-                    ]}
+                    onBlur={() =>
+                      setTouchedInputs((prev) => ({
+                        ...prev,
+                        confirmPassword: true,
+                      }))
+                    }
+                    style={styles.input}
                     placeholderTextColor="#666"
                   />
-                  {!passwordsMatch && confirmPassword !== '' && (
-                    <Text style={styles.errorText}>
-                      Las contraseñas no coinciden
-                    </Text>
-                  )}
+                  {touchedInputs.confirmPassword && confirmPasswordError ? (
+                    <Text style={styles.errorText}>{confirmPasswordError}</Text>
+                  ) : null}
                 </View>
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>Nombre</Text>
@@ -218,25 +372,47 @@ export default function SignUpScreen() {
                     mode="date"
                     onConfirm={handleConfirm}
                     onCancel={hideDatePicker}
+                    maximumDate={new Date()}
                   />
+                  {touchedInputs.date && dateError ? (
+                    <Text style={styles.errorText}>{dateError}</Text>
+                  ) : null}
                 </View>
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>Teléfono</Text>
                   <TextInput
                     value={phone}
-                    placeholder="Teléfono..."
+                    placeholder="0999705758"
                     onChangeText={(phone) => setPhone(phone)}
+                    onBlur={() =>
+                      setTouchedInputs((prev) => ({ ...prev, phone: true }))
+                    }
                     style={styles.input}
                     placeholderTextColor="#666"
+                    keyboardType="numeric"
                   />
+                  {touchedInputs.phone && phoneError ? (
+                    <Text style={styles.errorText}>{phoneError}</Text>
+                  ) : null}
                 </View>
                 <TouchableOpacity
                   onPress={onSignUpPress}
                   style={[
                     styles.button,
-                    !passwordsMatch && styles.buttonDisabled,
+                    (!isEmailApproved ||
+                      passwordError ||
+                      confirmPasswordError ||
+                      phoneError ||
+                      dateError) &&
+                      styles.buttonDisabled,
                   ]}
-                  disabled={!passwordsMatch}
+                  disabled={
+                    !isEmailApproved ||
+                    passwordError ||
+                    confirmPasswordError ||
+                    phoneError ||
+                    dateError
+                  }
                 >
                   <Text style={styles.buttonText}>Registrarse</Text>
                 </TouchableOpacity>
@@ -276,12 +452,6 @@ const styles = StyleSheet.create({
   formContainer: {
     marginTop: 32,
   },
-  logo: {
-    width: 200,
-    height: 100,
-    alignSelf: 'center',
-    marginBottom: 20,
-  },
   headerText: {
     marginBottom: 32,
     fontSize: 24,
@@ -307,11 +477,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#727272',
   },
-  inputError: {
-    borderColor: 'red',
+  approvedEmailInput: {
+    borderColor: '#4BB543',
+    borderWidth: 2,
   },
   errorText: {
     color: 'red',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  approvedText: {
+    color: '#4BB543',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  checkingText: {
+    color: '#FFA500',
     fontSize: 12,
     marginTop: 4,
   },

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -12,10 +13,12 @@ import {
   Keyboard,
   ActivityIndicator,
   Image,
+  Alert,
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { useSignIn } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
+import { supabase } from '../../supabase';
 
 export default function SignInScreen() {
   const { signIn, setActive, isLoaded } = useSignIn();
@@ -28,10 +31,46 @@ export default function SignInScreen() {
   const [isFormValid, setIsFormValid] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
+  const [emailStatus, setEmailStatus] = useState(''); // 'approved', 'approved_unregistered', or ''
 
   useEffect(() => {
     validateForm();
   }, [emailAddress, password]);
+
+  useEffect(() => {
+    const checkEmail = async () => {
+      if (emailAddress.includes('@')) {
+        setEmailStatus('checking');
+        // Check if email is in approved_emails
+        const { data: approvedData, error: approvedError } = await supabase
+          .from('approved_emails')
+          .select('email')
+          .eq('email', emailAddress)
+          .single();
+
+        if (!approvedError && approvedData) {
+          // Email is approved, now check if it's registered
+          const { data: userData, error: userError } = await supabase
+            .from('users')
+            .select('email')
+            .eq('email', emailAddress)
+            .single();
+
+          if (!userError && userData) {
+            setEmailStatus('approved');
+          } else {
+            setEmailStatus('approved_unregistered');
+          }
+        } else {
+          setEmailStatus('');
+        }
+      } else {
+        setEmailStatus('');
+      }
+    };
+
+    checkEmail();
+  }, [emailAddress]);
 
   const validateForm = () => {
     let isValid = true;
@@ -61,7 +100,25 @@ export default function SignInScreen() {
   const onSignInPress = async () => {
     setShowErrors(true);
     validateForm();
-    if (!isLoaded) return;
+    if (!isLoaded || !isFormValid) return;
+
+    if (emailStatus === 'approved_unregistered') {
+      Alert.alert(
+        'Cuenta no registrada',
+        'Tu correo electrónico está aprobado pero aún no tienes una cuenta. ¿Te gustaría registrarte?',
+        [
+          {
+            text: 'Cancelar',
+            style: 'cancel',
+          },
+          {
+            text: 'Registrarse',
+            onPress: () => router.push('/sign-up'),
+          },
+        ]
+      );
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -74,7 +131,6 @@ export default function SignInScreen() {
         await setActive({ session: signInAttempt.createdSessionId });
         await SecureStore.setItemAsync(
           'userToken',
-          // @ts-ignore
           signInAttempt.createdSessionId
         );
         router.replace('/(tabs)');
@@ -82,12 +138,11 @@ export default function SignInScreen() {
         console.error(JSON.stringify(signInAttempt, null, 2));
       }
     } catch (err) {
-      // @ts-ignore
       if (err.errors && err.errors[0].code === 'form_identifier_not_found') {
-        setPasswordError('No se pudo encontrar tu cuenta.');
-        // @ts-ignore
+        setPasswordError(
+          'No se pudo encontrar tu cuenta o el correo no está aprobado.'
+        );
       } else if (err.errors && err.errors[0].message) {
-        // @ts-ignore
         setPasswordError(err.errors[0].message);
       } else {
         setPasswordError('Ocurrió un error durante el inicio de sesión');
@@ -110,7 +165,7 @@ export default function SignInScreen() {
               style={styles.logo}
               resizeMode="contain"
             />
-            <Text style={styles.headerText}>Inicia sesión en tu cuenta</Text>
+            {/* <Text style={styles.headerText}>Inicia sesión</Text> */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Correo electrónico</Text>
               <TextInput
@@ -118,12 +173,28 @@ export default function SignInScreen() {
                 value={emailAddress}
                 placeholder="Correo electrónico..."
                 onChangeText={(email) => setEmailAddress(email)}
-                style={styles.input}
+                style={[
+                  styles.input,
+                  emailStatus === 'approved' && styles.approvedEmailInput,
+                  emailStatus === 'approved_unregistered' &&
+                    styles.approvedUnregisteredEmailInput,
+                ]}
                 placeholderTextColor="#666"
               />
               {showErrors && emailError ? (
                 <Text style={styles.errorText}>{emailError}</Text>
               ) : null}
+              {emailStatus === 'checking' && (
+                <Text style={styles.checkingText}>Verificando...</Text>
+              )}
+              {emailStatus === 'approved' && (
+                <Text style={styles.approvedText}>Correo aprobado</Text>
+              )}
+              {emailStatus === 'approved_unregistered' && (
+                <Text style={styles.approvedUnregisteredText}>
+                  Correo aprobado, puedes registrarte
+                </Text>
+              )}
             </View>
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Contraseña</Text>
@@ -149,21 +220,23 @@ export default function SignInScreen() {
             </View>
             <TouchableOpacity
               onPress={onSignInPress}
-              style={[styles.button, isSubmitting && styles.buttonDisabled]}
+              style={[
+                styles.button,
+                (!isFormValid || isSubmitting) && styles.buttonDisabled,
+              ]}
+              disabled={!isFormValid || isSubmitting}
             >
               {isSubmitting ? (
                 <ActivityIndicator color="white" />
               ) : (
-                <Text style={styles.buttonText}>Iniciar Sesión</Text>
+                <Text style={styles.buttonText}>Inicia Sesión</Text>
               )}
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => router.push('/sign-up')}
               style={styles.button}
             >
-              <Text style={styles.buttonText}>
-                ¿No tienes una cuenta? Regístrate
-              </Text>
+              <Text style={styles.buttonText}>Regístrate</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -217,6 +290,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#333',
   },
+  approvedEmailInput: {
+    borderColor: '#4BB543',
+    borderWidth: 2,
+  },
+  approvedUnregisteredEmailInput: {
+    borderColor: '#FFA500',
+    borderWidth: 2,
+  },
   button: {
     backgroundColor: '#FF5252',
     borderRadius: 4,
@@ -234,6 +315,21 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: '#FF5252',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  approvedText: {
+    color: '#4BB543',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  approvedUnregisteredText: {
+    color: '#FFA500',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  checkingText: {
+    color: '#FFA500',
     fontSize: 12,
     marginTop: 4,
   },

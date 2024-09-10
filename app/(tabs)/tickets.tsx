@@ -10,44 +10,34 @@ import {
   RefreshControl,
   Image,
   Animated,
+  ActivityIndicator,
+  SafeAreaView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../supabase';
 import { useAuth } from '@clerk/clerk-expo';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Oswald_400Regular, useFonts } from '@expo-google-fonts/dev';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 const screenWidth = Dimensions.get('window').width;
 
-export default function TicketsScreen() {
-  const [tickets, setTickets] = useState([]);
-  const [refreshing, setRefreshing] = useState(false);
-  const { userId } = useAuth();
-  const router = useRouter();
-  const animatedValues = useRef({}).current;
+const TICKETS_CACHE_KEY = 'tickets_cache';
 
-  let [fontsLoaded] = useFonts({
-    Oswald_400Regular,
-  });
-
-  useEffect(() => {
-    fetchTickets();
-  }, []);
-
-  const animateTickets = () => {
-    Object.values(animatedValues).forEach((value, index) => {
-      Animated.timing(value, {
-        toValue: 1,
-        duration: 500,
-        delay: index * 100, // Stagger effect
-        useNativeDriver: true,
-      }).start();
-    });
-  };
+const useTickets = (userId) => {
+  const queryClient = useQueryClient();
 
   const fetchTickets = async () => {
-    if (!userId) return;
+    const isConnected = await NetInfo.fetch().then(
+      (state) => state.isConnected
+    );
+
+    if (!isConnected) {
+      const cachedTickets = await AsyncStorage.getItem(TICKETS_CACHE_KEY);
+      return cachedTickets ? JSON.parse(cachedTickets) : [];
+    }
 
     try {
       const { data: user, error: userError } = await supabase
@@ -60,12 +50,7 @@ export default function TicketsScreen() {
 
       const { data, error } = await supabase
         .from('userevents')
-        .select(
-          `
-          *,
-          events(*)
-        `
-        )
+        .select(`*, events(*)`)
         .eq('user_id', user.id)
         .eq('status', 'purchased');
 
@@ -77,100 +62,153 @@ export default function TicketsScreen() {
         user_last_name: user.last_name,
       }));
 
-      // Create or reset animated values for each ticket
-      ticketsWithUserInfo.forEach((ticket) => {
-        if (!animatedValues[ticket.id]) {
-          animatedValues[ticket.id] = new Animated.Value(0);
-        } else {
-          animatedValues[ticket.id].setValue(0);
-        }
-      });
-
-      setTickets(ticketsWithUserInfo);
-      animateTickets();
+      await AsyncStorage.setItem(
+        TICKETS_CACHE_KEY,
+        JSON.stringify(ticketsWithUserInfo)
+      );
+      return ticketsWithUserInfo;
     } catch (error) {
       console.error('Error fetching tickets:', error);
+      throw error;
     }
   };
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    fetchTickets().then(() => setRefreshing(false));
-  }, []);
+  return useQuery(['tickets', userId], fetchTickets, {
+    enabled: !!userId,
+  });
+};
 
-  const goToDetails = (ticket) => {
-    router.push({
-      pathname: '/ticket-details',
-      params: {
-        event_name: ticket.events.event_name,
-        event_date: ticket.events.event_date,
-        location: ticket.events.location,
-        qr_code: ticket.qr_code,
-        user_first_name: ticket.user_first_name,
-        user_last_name: ticket.user_last_name,
-      },
+export default function TicketsScreen() {
+  const { userId } = useAuth();
+  const { data: tickets, isLoading, isError, refetch } = useTickets(userId);
+  const router = useRouter();
+  const animatedValues = useRef({}).current;
+
+  let [fontsLoaded] = useFonts({
+    Oswald_400Regular,
+  });
+
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      if (state.isConnected) {
+        refetch();
+      }
     });
-  };
 
-  const calculateDaysLeft = (eventDate) => {
+    return () => unsubscribe();
+  }, [refetch]);
+
+  const onRefresh = useCallback(() => {
+    refetch();
+  }, [refetch]);
+
+  const goToDetails = useCallback(
+    (ticket) => {
+      router.push({
+        pathname: '/ticket-details',
+        params: {
+          event_name: ticket.events.event_name,
+          event_date: ticket.events.event_date,
+          location: ticket.events.location,
+          qr_code: ticket.qr_code,
+          user_first_name: ticket.user_first_name,
+          user_last_name: ticket.user_last_name,
+        },
+      });
+    },
+    [router]
+  );
+
+  const calculateDaysLeft = useCallback((eventDate) => {
     const eventDateObj = new Date(eventDate);
     const today = new Date();
     const timeDiff = eventDateObj - today;
     const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
     return daysDiff;
-  };
+  }, []);
 
-  const renderTicket = (item) => {
-    const daysLeft = calculateDaysLeft(item.events.event_date);
-    const animatedValue = animatedValues[item.id] || new Animated.Value(1);
+  const renderTicket = useCallback(
+    (item) => {
+      const daysLeft = calculateDaysLeft(item.events.event_date);
+      const animatedValue = animatedValues[item.id] || new Animated.Value(1);
 
-    const animatedStyle = {
-      opacity: animatedValue,
-      transform: [
-        {
-          translateX: animatedValue.interpolate({
-            inputRange: [0, 1],
-            outputRange: [50, 0], // Slide in from 50px to the right
-          }),
-        },
-      ],
-    };
+      const animatedStyle = {
+        opacity: animatedValue,
+        transform: [
+          {
+            translateX: animatedValue.interpolate({
+              inputRange: [0, 1],
+              outputRange: [50, 0],
+            }),
+          },
+        ],
+      };
 
-    return (
-      <Animated.View key={item.id} style={animatedStyle}>
-        <TouchableOpacity
-          onPress={() => goToDetails(item)}
-          activeOpacity={0.9}
-          style={styles.ticketContainer}
-        >
-          <View style={styles.grooveLeft} />
-          <View style={styles.grooveRight} />
-          <View style={styles.daysContainer}>
-            <Text style={styles.daysText}>{daysLeft} MORE DAYS</Text>
-          </View>
-          <View style={styles.ticketContent}>
-            <View style={styles.textContainer}>
-              <Text style={styles.eventName}>{item.events.event_name}</Text>
-              <Text style={styles.eventDetails}>
-                <Text style={styles.eventDate}>
-                  {new Date(item.events.event_date).toLocaleDateString()}
-                </Text>{' '}
-                - {item.events.location}
-              </Text>
+      return (
+        <Animated.View key={item.id} style={animatedStyle}>
+          <TouchableOpacity
+            onPress={() => goToDetails(item)}
+            activeOpacity={0.9}
+            style={styles.ticketContainer}
+          >
+            <View style={styles.grooveLeft} />
+            <View style={styles.grooveRight} />
+            <View style={styles.daysContainer}>
+              <Text style={styles.daysText}>{daysLeft} MORE DAYS</Text>
             </View>
-            <Image
-              source={{ uri: item.events.image_url }}
-              style={styles.eventImage}
-            />
-          </View>
-          <View style={styles.dottedLine} />
-        </TouchableOpacity>
-      </Animated.View>
-    );
-  };
+            <View style={styles.ticketContent}>
+              <View style={styles.textContainer}>
+                <Text style={styles.eventName}>{item.events.event_name}</Text>
+                <Text style={styles.eventDetails}>
+                  <Text style={styles.eventDate}>
+                    {new Date(item.events.event_date).toLocaleDateString()}
+                  </Text>{' '}
+                  - {item.events.location}
+                </Text>
+              </View>
+              <Image
+                source={{ uri: item.events.image_url }}
+                style={styles.eventImage}
+              />
+            </View>
+            <View style={styles.dottedLine} />
+          </TouchableOpacity>
+        </Animated.View>
+      );
+    },
+    [calculateDaysLeft, goToDetails, animatedValues]
+  );
 
-  if (!fontsLoaded) {
-    return <Text>Loading...</Text>;
+  useEffect(() => {
+    if (tickets) {
+      tickets.forEach((ticket) => {
+        if (!animatedValues[ticket.id]) {
+          animatedValues[ticket.id] = new Animated.Value(0);
+        }
+        Animated.timing(animatedValues[ticket.id], {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+        }).start();
+      });
+    }
+  }, [tickets, animatedValues]);
+
+  if (!fontsLoaded || isLoading) {
+    return (
+      <SafeAreaView style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#FF5252" />
+        <Text style={styles.loadingText}>Loading tickets...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (isError) {
+    return (
+      <SafeAreaView style={styles.loadingContainer}>
+        <Text style={styles.errorText}>Error loading tickets</Text>
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -180,23 +218,40 @@ export default function TicketsScreen() {
         contentContainerStyle={styles.ticketsContainer}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
+            refreshing={isLoading}
             onRefresh={onRefresh}
             colors={['#FF5252']}
           />
         }
       >
-        {tickets.map((ticket) => renderTicket(ticket))}
+        {tickets && tickets.map((ticket) => renderTicket(ticket))}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-// ... styles remain unchanged
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000000',
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: '#FF5252',
+    fontSize: 18,
+    fontFamily: 'Oswald_400Regular',
+    marginTop: 10,
+  },
+  errorText: {
+    color: '#FF5252',
+    fontSize: 18,
+    fontFamily: 'Oswald_400Regular',
+    textAlign: 'center',
   },
   header: {
     fontSize: 35,

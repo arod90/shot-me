@@ -22,3 +22,6 @@ expo-env.d.ts
 # ai-digest
 .aidigestignore
 codebase.md
+
+# Environment variables
+.env
