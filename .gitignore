@@ -25,3 +25,6 @@ codebase.md
 
 # Environment variables
 .env
+
+# db example
+db.md
