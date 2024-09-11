@@ -3,7 +3,6 @@ import {
   View,
   Text,
   Image,
-  StyleSheet,
   TouchableOpacity,
   Alert,
   SafeAreaView,
@@ -17,6 +16,7 @@ import { supabase } from '../../supabase';
 import { useAuth } from '@clerk/clerk-expo';
 import { Ionicons } from '@expo/vector-icons';
 import Modal from 'react-native-modal';
+import { StyleSheet } from 'react-native';
 
 const { width } = Dimensions.get('window');
 
@@ -255,6 +255,30 @@ export default function EventDetailScreen() {
             <Ionicons name="location-outline" size={24} color="#FF5252" />
             <Text style={styles.eventLocation}>{event.location}</Text>
           </View>
+
+          <View style={styles.additionalDetailsContainer}>
+            <Text style={styles.sectionTitle}>Description</Text>
+            <Text style={styles.descriptionText}>{event.description}</Text>
+
+            <Text style={styles.sectionTitle}>Lineup</Text>
+            {event.lineup &&
+              event.lineup.map((artist, index) => (
+                <Text key={index} style={styles.lineupText}>
+                  • {artist}
+                </Text>
+              ))}
+
+            <Text style={styles.sectionTitle}>Price Tiers</Text>
+            {event.price_tiers &&
+              Object.entries(event.price_tiers).map(([tier, price], index) => (
+                <Text key={index} style={styles.priceTierText}>
+                  {tier}: ${price}
+                </Text>
+              ))}
+
+            <Text style={styles.sectionTitle}>Dress Code</Text>
+            <Text style={styles.dressCodeText}>{event.dress_code}</Text>
+          </View>
         </View>
         <View style={styles.tabContainer}>
           <TouchableOpacity
@@ -365,6 +389,39 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#B0B0B0',
     marginLeft: 8,
+  },
+  additionalDetailsContainer: {
+    marginTop: 24,
+  },
+  sectionTitle: {
+    fontFamily: 'Oswald_600SemiBold',
+    fontSize: 20,
+    color: '#FFFFFF',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  descriptionText: {
+    fontFamily: 'Oswald_400Regular',
+    fontSize: 16,
+    color: '#B0B0B0',
+    marginBottom: 16,
+  },
+  lineupText: {
+    fontFamily: 'Oswald_400Regular',
+    fontSize: 16,
+    color: '#B0B0B0',
+    marginLeft: 16,
+  },
+  priceTierText: {
+    fontFamily: 'Oswald_400Regular',
+    fontSize: 16,
+    color: '#B0B0B0',
+    marginLeft: 16,
+  },
+  dressCodeText: {
+    fontFamily: 'Oswald_400Regular',
+    fontSize: 16,
+    color: '#B0B0B0',
   },
   tabContainer: {
     flexDirection: 'row',
@@ -490,5 +547,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#FFFFFF',
     marginLeft: 10,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 10,
   },
 });
