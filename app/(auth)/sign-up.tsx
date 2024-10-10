@@ -19,6 +19,7 @@ import { useSignUp } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { supabase } from '../../supabase';
+import { Ionicons } from '@expo/vector-icons'; // Make sure to install @expo/vector-icons if you haven't already
 
 export default function SignUpScreen() {
   const { isLoaded, signUp, setActive } = useSignUp();
@@ -27,6 +28,8 @@ export default function SignUpScreen() {
   const [emailAddress, setEmailAddress] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [pendingVerification, setPendingVerification] = useState(false);
   const [code, setCode] = useState('');
   const [firstName, setFirstName] = useState('');
@@ -104,6 +107,8 @@ export default function SignUpScreen() {
     }
   };
 
+  //!TODO passwords in data breach trigger errors
+
   const validatePassword = () => {
     if (!password.trim()) {
       setPasswordError('La contraseña es requerida');
@@ -149,8 +154,10 @@ export default function SignUpScreen() {
 
     if (age < 18) {
       setDateError('Debes ser mayor de 18 años para registrarte');
+      return false;
     } else {
       setDateError('');
+      return true;
     }
   };
 
@@ -183,7 +190,8 @@ export default function SignUpScreen() {
       passwordError ||
       confirmPasswordError ||
       phoneError ||
-      dateError
+      dateError ||
+      !validateAge()
     )
       return;
 
@@ -197,10 +205,16 @@ export default function SignUpScreen() {
       setPendingVerification(true);
     } catch (err) {
       console.error(JSON.stringify(err, null, 2));
-      Alert.alert(
-        'Error',
-        'Error al registrarse. Por favor, inténtalo de nuevo.'
-      );
+      if (err.errors && err.errors[0].code === 'form_password_pwned') {
+        setPasswordError(
+          'Please choose a stronger password for your security.'
+        );
+      } else {
+        Alert.alert(
+          'Error',
+          'Error al registrarse. Por favor, inténtalo de nuevo.'
+        );
+      }
     }
   };
 
@@ -300,39 +314,68 @@ export default function SignUpScreen() {
                 </View>
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>Contraseña</Text>
-                  <TextInput
-                    value={password}
-                    placeholder="Contraseña..."
-                    secureTextEntry={true}
-                    onChangeText={(password) => setPassword(password)}
-                    onBlur={() =>
-                      setTouchedInputs((prev) => ({ ...prev, password: true }))
-                    }
-                    style={styles.input}
-                    placeholderTextColor="#666"
-                  />
+                  <View style={styles.passwordContainer}>
+                    <TextInput
+                      value={password}
+                      placeholder="Contraseña..."
+                      secureTextEntry={!showPassword}
+                      onChangeText={(password) => setPassword(password)}
+                      onBlur={() =>
+                        setTouchedInputs((prev) => ({
+                          ...prev,
+                          password: true,
+                        }))
+                      }
+                      style={styles.passwordInput}
+                      placeholderTextColor="#666"
+                    />
+                    <TouchableOpacity
+                      style={styles.eyeIcon}
+                      onPress={() => setShowPassword(!showPassword)}
+                    >
+                      <Ionicons
+                        name={showPassword ? 'eye-off' : 'eye'}
+                        size={24}
+                        color="#666"
+                      />
+                    </TouchableOpacity>
+                  </View>
                   {touchedInputs.password && passwordError ? (
                     <Text style={styles.errorText}>{passwordError}</Text>
                   ) : null}
                 </View>
                 <View style={styles.inputGroup}>
                   <Text style={styles.label}>Confirmar Contraseña</Text>
-                  <TextInput
-                    value={confirmPassword}
-                    placeholder="Confirmar Contraseña..."
-                    secureTextEntry={true}
-                    onChangeText={(confirmPass) =>
-                      setConfirmPassword(confirmPass)
-                    }
-                    onBlur={() =>
-                      setTouchedInputs((prev) => ({
-                        ...prev,
-                        confirmPassword: true,
-                      }))
-                    }
-                    style={styles.input}
-                    placeholderTextColor="#666"
-                  />
+                  <View style={styles.passwordContainer}>
+                    <TextInput
+                      value={confirmPassword}
+                      placeholder="Confirmar Contraseña..."
+                      secureTextEntry={!showConfirmPassword}
+                      onChangeText={(confirmPass) =>
+                        setConfirmPassword(confirmPass)
+                      }
+                      onBlur={() =>
+                        setTouchedInputs((prev) => ({
+                          ...prev,
+                          confirmPassword: true,
+                        }))
+                      }
+                      style={styles.passwordInput}
+                      placeholderTextColor="#666"
+                    />
+                    <TouchableOpacity
+                      style={styles.eyeIcon}
+                      onPress={() =>
+                        setShowConfirmPassword(!showConfirmPassword)
+                      }
+                    >
+                      <Ionicons
+                        name={showConfirmPassword ? 'eye-off' : 'eye'}
+                        size={24}
+                        color="#666"
+                      />
+                    </TouchableOpacity>
+                  </View>
                   {touchedInputs.confirmPassword && confirmPasswordError ? (
                     <Text style={styles.errorText}>{confirmPasswordError}</Text>
                   ) : null}
@@ -476,6 +519,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: '#727272',
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#333',
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#727272',
+  },
+  passwordInput: {
+    flex: 1,
+    padding: 12,
+    color: 'white',
+    fontSize: 16,
+  },
+  eyeIcon: {
+    padding: 10,
   },
   approvedEmailInput: {
     borderColor: '#4BB543',

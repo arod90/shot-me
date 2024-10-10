@@ -1,15 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ClerkProvider, ClerkLoaded, useAuth } from '@clerk/clerk-expo';
+import {
+  ClerkProvider,
+  ClerkLoaded,
+  useAuth,
+  useUser,
+} from '@clerk/clerk-expo';
 import { Stack, useRouter } from 'expo-router';
 import { View, ActivityIndicator, Linking } from 'react-native';
 import LoadingScreen from '../components/LoadingScreen';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './queryClient';
+import { supabase } from '../supabase';
 import {
   registerForPushNotificationsAsync,
   setupNotifications,
 } from './utils/notifications';
-import { supabase } from '../supabase';
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
@@ -41,6 +46,7 @@ export default function RootLayout() {
 
 function RootLayoutNav() {
   const { isSignedIn, isLoaded, userId } = useAuth();
+  const { user } = useUser();
   const router = useRouter();
   const [expoPushToken, setExpoPushToken] = useState('');
   const [notification, setNotification] = useState(false);
@@ -92,12 +98,6 @@ function RootLayoutNav() {
 
       if (error) {
         console.error('Error updating push token:', error);
-        // If the column doesn't exist, log a more specific error
-        if (error.code === 'PGRST204') {
-          console.error(
-            'The push_token column might not exist in the users table'
-          );
-        }
       } else {
         console.log('Push token updated successfully');
       }
@@ -106,15 +106,53 @@ function RootLayoutNav() {
     }
   };
 
-  React.useEffect(() => {
-    if (isLoaded) {
-      if (isSignedIn) {
-        router.replace('/(tabs)');
-      } else {
+  useEffect(() => {
+    const setupUser = async () => {
+      if (isLoaded && isSignedIn && userId && user) {
+        try {
+          // Fetch user data from Supabase
+          const { data: userData, error: userError } = await supabase
+            .from('users')
+            .select('id')
+            .eq('clerk_id', userId)
+            .single();
+
+          if (userError) {
+            if (userError.code === 'PGRST116') {
+              // User not found, create new user
+              const { data: newUser, error: createError } = await supabase
+                .from('users')
+                .insert({
+                  clerk_id: userId,
+                  email: user.primaryEmailAddress?.emailAddress || '',
+                  first_name: user.firstName || '',
+                  last_name: user.lastName || '',
+                  // Add other fields as necessary
+                })
+                .select('id')
+                .single();
+
+              if (createError) {
+                throw createError;
+              }
+            } else {
+              throw userError;
+            }
+          }
+
+          // User exists or has been created, safe to redirect
+          router.replace('/(tabs)');
+        } catch (error) {
+          console.error('Error setting up user:', error);
+          // Handle error (e.g., show error message to user)
+        }
+      } else if (isLoaded && !isSignedIn) {
         router.replace('/(auth)/sign-in');
       }
-    }
-  }, [isSignedIn, isLoaded]);
+    };
+
+    setupUser();
+  }, [isSignedIn, isLoaded, userId, user]);
 
   React.useEffect(() => {
     const handleDeepLink = ({ url }) => {

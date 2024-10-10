@@ -1,3 +1,7 @@
+// @ts-nocheck
+
+'use client';
+
 import React, { useState } from 'react';
 import {
   View,
@@ -11,8 +15,10 @@ import {
   Keyboard,
   ActivityIndicator,
   Image,
+  Alert,
 } from 'react-native';
-import { useClerk } from '@clerk/clerk-expo';
+import { Ionicons } from '@expo/vector-icons';
+import { useClerk, useSignIn, useAuth } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
 
 export default function ForgotPasswordScreen() {
@@ -20,7 +26,12 @@ export default function ForgotPasswordScreen() {
   const [emailError, setEmailError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  const [resetCode, setResetCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const clerk = useClerk();
+  const { signIn, setActive } = useSignIn();
+  const { signOut } = useAuth();
   const router = useRouter();
 
   const validateEmail = () => {
@@ -40,7 +51,7 @@ export default function ForgotPasswordScreen() {
 
     setIsSubmitting(true);
     try {
-      await clerk.client.signIn.create({
+      await signIn.create({
         strategy: 'reset_password_email_code',
         identifier: email,
       });
@@ -52,6 +63,37 @@ export default function ForgotPasswordScreen() {
       );
       setEmailError(
         'Error al enviar el correo de restablecimiento. Por favor, inténtalo de nuevo.'
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleVerifyResetCode = async () => {
+    setIsSubmitting(true);
+    try {
+      const result = await signIn.attemptFirstFactor({
+        strategy: 'reset_password_email_code',
+        code: resetCode,
+        password: newPassword,
+      });
+
+      if (result.status === 'complete') {
+        // Sign out the user to clear any existing sessions
+        await signOut();
+        Alert.alert(
+          'Éxito',
+          'Contraseña restablecida correctamente. Por favor, inicia sesión con tu nueva contraseña.',
+          [{ text: 'OK', onPress: () => router.replace('/sign-in') }]
+        );
+      } else {
+        throw new Error('Unable to reset password');
+      }
+    } catch (err) {
+      console.error('Error resetting password:', err);
+      Alert.alert(
+        'Error',
+        'Error al restablecer la contraseña. Por favor, inténtalo de nuevo.'
       );
     } finally {
       setIsSubmitting(false);
@@ -71,36 +113,77 @@ export default function ForgotPasswordScreen() {
             resizeMode="contain"
           />
           <Text style={styles.headerText}>Restablecer tu contraseña</Text>
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Correo electrónico</Text>
-            <TextInput
-              autoCapitalize="none"
-              value={email}
-              placeholder="Correo electrónico..."
-              onChangeText={(text) => setEmail(text)}
-              style={styles.input}
-              placeholderTextColor="#666"
-            />
-            {emailError ? (
-              <Text style={styles.errorText}>{emailError}</Text>
-            ) : null}
-          </View>
-          <TouchableOpacity
-            onPress={handleResetPassword}
-            style={[styles.button, isSubmitting && styles.buttonDisabled]}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <Text style={styles.buttonText}>Restablecer Contraseña</Text>
-            )}
-          </TouchableOpacity>
-          {resetSent && (
-            <Text style={styles.successText}>
-              Revisa tu correo electrónico para el enlace de restablecimiento de
-              contraseña.
-            </Text>
+          {!resetSent ? (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Correo electrónico</Text>
+              <TextInput
+                autoCapitalize="none"
+                value={email}
+                placeholder="Correo electrónico..."
+                onChangeText={(text) => setEmail(text)}
+                style={styles.input}
+                placeholderTextColor="#666"
+              />
+              {emailError ? (
+                <Text style={styles.errorText}>{emailError}</Text>
+              ) : null}
+              <TouchableOpacity
+                onPress={handleResetPassword}
+                style={[styles.button, isSubmitting && styles.buttonDisabled]}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text style={styles.buttonText}>
+                    Enviar código de restablecimiento
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Código de restablecimiento</Text>
+              <TextInput
+                value={resetCode}
+                placeholder="Ingrese el código..."
+                onChangeText={(text) => setResetCode(text)}
+                style={styles.input}
+                placeholderTextColor="#666"
+              />
+              <Text style={styles.label}>Nueva contraseña</Text>
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  value={newPassword}
+                  placeholder="Nueva contraseña..."
+                  onChangeText={(text) => setNewPassword(text)}
+                  style={styles.passwordInput}
+                  placeholderTextColor="#666"
+                  secureTextEntry={!showPassword}
+                />
+                <TouchableOpacity
+                  style={styles.eyeIcon}
+                  onPress={() => setShowPassword(!showPassword)}
+                >
+                  <Ionicons
+                    name={showPassword ? 'eye-off' : 'eye'}
+                    size={24}
+                    color="#666"
+                  />
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                onPress={handleVerifyResetCode}
+                style={[styles.button, isSubmitting && styles.buttonDisabled]}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text style={styles.buttonText}>Restablecer Contraseña</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           )}
           <TouchableOpacity
             onPress={() => router.back()}
@@ -154,6 +237,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: '#727272',
+    marginBottom: 16,
   },
   button: {
     backgroundColor: '#FF5252',
@@ -190,5 +274,23 @@ const styles = StyleSheet.create({
   backButtonText: {
     color: '#FF5252',
     fontSize: 16,
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#333',
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#727272',
+    marginBottom: 16,
+  },
+  passwordInput: {
+    flex: 1,
+    padding: 12,
+    color: 'white',
+    fontSize: 16,
+  },
+  eyeIcon: {
+    padding: 10,
   },
 });

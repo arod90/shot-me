@@ -16,12 +16,13 @@ import {
   Alert,
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
-import { useSignIn } from '@clerk/clerk-expo';
+import { useSignIn, useAuth } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../supabase';
 
 export default function SignInScreen() {
   const { signIn, setActive, isLoaded } = useSignIn();
+  const { signOut } = useAuth();
   const router = useRouter();
 
   const [emailAddress, setEmailAddress] = useState('');
@@ -97,6 +98,8 @@ export default function SignInScreen() {
     router.push('/forgot-password');
   };
 
+  // !TODO session already exists error message after reset password, also the user should be redirected to the home screen after resetting the password.
+
   const onSignInPress = async () => {
     setShowErrors(true);
     validateForm();
@@ -122,6 +125,9 @@ export default function SignInScreen() {
 
     setIsSubmitting(true);
     try {
+      // First, try to sign out any existing session
+      await signOut();
+
       const signInAttempt = await signIn.create({
         identifier: emailAddress,
         password,
@@ -138,7 +144,33 @@ export default function SignInScreen() {
         console.error(JSON.stringify(signInAttempt, null, 2));
       }
     } catch (err) {
-      if (err.errors && err.errors[0].code === 'form_identifier_not_found') {
+      console.error('Sign in error:', err);
+      if (err.errors && err.errors[0].code === 'session_exists') {
+        // If a session already exists, try to sign out and sign in again
+        try {
+          await signOut();
+          const retrySignIn = await signIn.create({
+            identifier: emailAddress,
+            password,
+          });
+          if (retrySignIn.status === 'complete') {
+            await setActive({ session: retrySignIn.createdSessionId });
+            await SecureStore.setItemAsync(
+              'userToken',
+              retrySignIn.createdSessionId
+            );
+            router.replace('/(tabs)');
+          }
+        } catch (retryError) {
+          console.error('Retry sign in error:', retryError);
+          setPasswordError(
+            'Error al iniciar sesión. Por favor, inténtalo de nuevo.'
+          );
+        }
+      } else if (
+        err.errors &&
+        err.errors[0].code === 'form_identifier_not_found'
+      ) {
         setPasswordError(
           'No se pudo encontrar tu cuenta o el correo no está aprobado.'
         );
