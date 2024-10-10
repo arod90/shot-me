@@ -1,10 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ClerkProvider, ClerkLoaded, useAuth } from '@clerk/clerk-expo';
 import { Stack, useRouter } from 'expo-router';
 import { View, ActivityIndicator, Linking } from 'react-native';
 import LoadingScreen from '../components/LoadingScreen';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './queryClient';
+import {
+  registerForPushNotificationsAsync,
+  setupNotifications,
+} from './utils/notifications';
+import { supabase } from '../supabase';
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
@@ -35,8 +40,71 @@ export default function RootLayout() {
 }
 
 function RootLayoutNav() {
-  const { isSignedIn, isLoaded } = useAuth();
+  const { isSignedIn, isLoaded, userId } = useAuth();
   const router = useRouter();
+  const [expoPushToken, setExpoPushToken] = useState('');
+  const [notification, setNotification] = useState(false);
+  const notificationListener = useRef();
+  const responseListener = useRef();
+
+  useEffect(() => {
+    registerForPushNotificationsAsync().then((token) =>
+      setExpoPushToken(token)
+    );
+
+    const cleanup = setupNotifications((notification) => {
+      setNotification(notification);
+    });
+
+    return () => {
+      cleanup();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (expoPushToken && userId) {
+      updateUserPushToken(userId, expoPushToken);
+    }
+  }, [expoPushToken, userId]);
+
+  const updateUserPushToken = async (userId, token) => {
+    try {
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('clerk_id', userId)
+        .single();
+
+      if (userError) {
+        console.error('Error fetching user:', userError);
+        return;
+      }
+
+      if (!userData) {
+        console.error('User not found');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('users')
+        .update({ push_token: token })
+        .eq('id', userData.id);
+
+      if (error) {
+        console.error('Error updating push token:', error);
+        // If the column doesn't exist, log a more specific error
+        if (error.code === 'PGRST204') {
+          console.error(
+            'The push_token column might not exist in the users table'
+          );
+        }
+      } else {
+        console.log('Push token updated successfully');
+      }
+    } catch (error) {
+      console.error('Unexpected error in updateUserPushToken:', error);
+    }
+  };
 
   React.useEffect(() => {
     if (isLoaded) {

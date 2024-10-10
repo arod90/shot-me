@@ -15,6 +15,7 @@ import {
   SafeAreaView,
   RefreshControl,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { supabase } from '../../supabase';
 import { Link } from 'expo-router';
@@ -43,11 +44,15 @@ const useEvents = () => {
     const { data: Events, error } = await supabase.from('events').select('*');
     if (error) throw error;
 
+    const sortedEvents = Events.sort(
+      (a, b) => new Date(a.event_date) - new Date(b.event_date)
+    );
+
     await AsyncStorage.setItem(
       EVENTS_CACHE_KEY,
-      JSON.stringify({ data: Events, timestamp: Date.now() })
+      JSON.stringify({ data: sortedEvents, timestamp: Date.now() })
     );
-    return Events;
+    return sortedEvents;
   };
 
   return useQuery(['events'], fetchEvents, {
@@ -164,16 +169,20 @@ export default function EventsScreen() {
     [getAnimatedStyle]
   );
 
-  if (!fontsLoaded) {
-    return <Text>Loading...</Text>;
-  }
-
-  if (isLoading) {
-    return <Text>Loading events...</Text>;
+  if (!fontsLoaded || isLoading) {
+    return (
+      <SafeAreaView style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#FF5252" />
+      </SafeAreaView>
+    );
   }
 
   if (isError) {
-    return <Text>Error loading events</Text>;
+    return (
+      <SafeAreaView style={styles.loadingContainer}>
+        <Text style={styles.errorText}>Error loading events</Text>
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -199,6 +208,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000000',
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorText: {
+    color: '#FF5252',
+    fontSize: 18,
+    fontFamily: 'Oswald_600SemiBold',
   },
   listContent: {
     padding: 24,
