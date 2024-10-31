@@ -5,7 +5,6 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "shotme",
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/images/splash.png",
@@ -14,7 +13,13 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.shotme.app"
+      "bundleIdentifier": "com.shotme.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "This app needs access to your photo library for profile pictures",
+        "NSPhotoLibraryAddUsageDescription": "This app needs access to save photos",
+        "UIBackgroundModes": ["remote-notification"]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -23,48 +28,16 @@
       },
       "package": "com.shotme.app"
     },
-    "web": {
-      "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
-    },
     "plugins": [
       [
         "expo-notifications",
         {
           "icon": "./assets/images/logo-blanco.png",
           "color": "#ffffff",
-          "sounds": ["./assets/sounds/noti.mp3"],
-          "androidMode": "default",
-          "androidCollapsedTitle": "New Notification",
-          "iosDisplayInForeground": true
+          "sounds": ["./assets/sounds/noti.mp3"]
         }
       ]
     ],
-    "notification": {
-      "icon": "./assets/images/logo-blanco.png",
-      "color": "#ffffff",
-      "androidMode": "default",
-      "androidCollapsedTitle": "New Notification",
-      "iosDisplayInForeground": true
-    },
-    "experiments": {
-      "typedRoutes": true
-    },
-    "extra": {
-      "router": {
-        "origin": false
-      },
-      "eas": {
-        "projectId": "8035dc51-ae72-41a1-9fe3-bb8e2bbb5613"
-      }
-    },
-    "owner": "arod90",
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
-    "updates": {
-      "url": "https://u.expo.dev/8035dc51-ae72-41a1-9fe3-bb8e2bbb5613"
-    }
+    "owner": "arod90"
   }
 }

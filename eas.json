@@ -10,9 +10,19 @@
     "preview": {
       "distribution": "internal"
     },
-    "production": {}
+    "production": {
+      "ios": {
+        "resourceClass": "m-medium"
+      }
+    }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "appleId": "web.arod@gmail.com",
+        "ascAppId": "6736916419",
+        "appleTeamId": "L7FF6PQ9T3"
+      }
+    }
   }
 }
