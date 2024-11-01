@@ -14,7 +14,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.shotme.app",
-      "buildNumber": "1",
+      "buildNumber": "2",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "This app needs access to your photo library for profile pictures",
         "NSPhotoLibraryAddUsageDescription": "This app needs access to save photos",
@@ -29,15 +29,21 @@
       "package": "com.shotme.app"
     },
     "plugins": [
+      "expo-notifications",
+      "expo-image-picker",
+      "expo-file-system",
       [
-        "expo-notifications",
+        "expo-updates",
         {
-          "icon": "./assets/images/logo-blanco.png",
-          "color": "#ffffff",
-          "sounds": ["./assets/sounds/noti.mp3"]
+          "username": "arod90"
         }
       ]
     ],
+    "extra": {
+      "eas": {
+        "projectId": "8035dc51-ae72-41a1-9fe3-bb8e2bbb5613"
+      }
+    },
     "owner": "arod90"
   }
 }

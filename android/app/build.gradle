@@ -109,7 +109,7 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.shotme"
+    namespace 'com.shotme.app'
     defaultConfig {
         applicationId 'com.shotme.app'
         minSdkVersion rootProject.ext.minSdkVersion
