@@ -2,9 +2,10 @@
   "expo": {
     "name": "shot-me",
     "slug": "shot-me",
-    "version": "1.0.0",
+    "version": "1.0.4",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
+    "scheme": "shotme",
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/images/splash.png",
@@ -14,11 +15,23 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.shotme.app",
-      "buildNumber": "2",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "This app needs access to your photo library for profile pictures",
         "NSPhotoLibraryAddUsageDescription": "This app needs access to save photos",
-        "UIBackgroundModes": ["remote-notification"]
+        "UIBackgroundModes": [
+          "remote-notification"
+        ],
+        "NSCameraUsageDescription": "This app needs camera access to scan QR codes and take profile pictures",
+        "NSMicrophoneUsageDescription": "This app needs microphone access for video features",
+        "CFBundleDevelopmentRegion": "en",
+        "UIRequiresFullScreen": true,
+        "ITSAppUsesNonExemptEncryption": false,
+        "LSApplicationQueriesSchemes": [
+          "shotme"
+        ]
+      },
+      "config": {
+        "usesNonExemptEncryption": false
       }
     },
     "android": {
@@ -26,7 +39,13 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.shotme.app"
+      "package": "com.shotme.app",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.INTERNET"
+      ]
     },
     "plugins": [
       "expo-notifications",
@@ -35,15 +54,16 @@
       [
         "expo-updates",
         {
-          "username": "arod90"
+          "username": "jrodri2709"
         }
-      ]
+      ],
+      "expo-font"
     ],
+    "owner": "jrodri2709",
     "extra": {
       "eas": {
-        "projectId": "8035dc51-ae72-41a1-9fe3-bb8e2bbb5613"
+        "projectId": "58532bbb-e22e-4528-ad5a-9e17409e2c37"
       }
-    },
-    "owner": "arod90"
+    }
   }
 }
