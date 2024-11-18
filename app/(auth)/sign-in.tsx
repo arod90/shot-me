@@ -32,7 +32,7 @@ export default function SignInScreen() {
   const [isFormValid, setIsFormValid] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
-  const [emailStatus, setEmailStatus] = useState(''); // 'approved', 'approved_unregistered', or ''
+  const [emailStatus, setEmailStatus] = useState('');
 
   useEffect(() => {
     validateForm();
@@ -42,7 +42,6 @@ export default function SignInScreen() {
     const checkEmail = async () => {
       if (emailAddress.includes('@')) {
         setEmailStatus('checking');
-        // Check if email is in approved_emails
         const { data: approvedData, error: approvedError } = await supabase
           .from('approved_emails')
           .select('email')
@@ -50,7 +49,6 @@ export default function SignInScreen() {
           .single();
 
         if (!approvedError && approvedData) {
-          // Email is approved, now check if it's registered
           const { data: userData, error: userError } = await supabase
             .from('users')
             .select('email')
@@ -98,8 +96,6 @@ export default function SignInScreen() {
     router.push('/forgot-password');
   };
 
-  // !TODO session already exists error message after reset password, also the user should be redirected to the home screen after resetting the password.
-
   const onSignInPress = async () => {
     setShowErrors(true);
     validateForm();
@@ -125,7 +121,6 @@ export default function SignInScreen() {
 
     setIsSubmitting(true);
     try {
-      // First, try to sign out any existing session
       await signOut();
 
       const signInAttempt = await signIn.create({
@@ -140,13 +135,10 @@ export default function SignInScreen() {
           signInAttempt.createdSessionId
         );
         router.replace('/(tabs)');
-      } else {
-        console.error(JSON.stringify(signInAttempt, null, 2));
       }
     } catch (err) {
       console.error('Sign in error:', err);
       if (err.errors && err.errors[0].code === 'session_exists') {
-        // If a session already exists, try to sign out and sign in again
         try {
           await signOut();
           const retrySignIn = await signIn.create({
@@ -188,16 +180,21 @@ export default function SignInScreen() {
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <ScrollView contentContainerStyle={styles.scrollContainer}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContainer}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
           <View style={styles.formContainer}>
             <Image
               source={require('../../assets/images/logo-blanco-nombre.png')}
               style={styles.logo}
               resizeMode="contain"
             />
-            {/* <Text style={styles.headerText}>Inicia sesión</Text> */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Correo electrónico</Text>
               <TextInput
@@ -212,6 +209,10 @@ export default function SignInScreen() {
                     styles.approvedUnregisteredEmailInput,
                 ]}
                 placeholderTextColor="#666"
+                keyboardType="email-address"
+                returnKeyType="next"
+                enablesReturnKeyAutomatically
+                blurOnSubmit={false}
               />
               {showErrors && emailError ? (
                 <Text style={styles.errorText}>{emailError}</Text>
@@ -237,6 +238,9 @@ export default function SignInScreen() {
                 onChangeText={(password) => setPassword(password)}
                 style={styles.input}
                 placeholderTextColor="#666"
+                returnKeyType="done"
+                enablesReturnKeyAutomatically
+                onSubmitEditing={onSignInPress}
               />
               {showErrors && passwordError ? (
                 <Text style={styles.errorText}>{passwordError}</Text>
@@ -295,13 +299,6 @@ const styles = StyleSheet.create({
     width: 200,
     height: 200,
     marginBottom: 20,
-  },
-  headerText: {
-    marginBottom: 32,
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: 'white',
-    textAlign: 'center',
   },
   inputGroup: {
     marginBottom: 16,

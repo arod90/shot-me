@@ -15,21 +15,30 @@ import {
   registerForPushNotificationsAsync,
   setupNotifications,
 } from './utils/notifications';
+import { useFonts, Oswald_400Regular } from '@expo-google-fonts/oswald';
+import * as SplashScreen from 'expo-splash-screen';
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
+SplashScreen.preventAutoHideAsync();
+
 export default function RootLayout() {
   const [isLoading, setIsLoading] = useState(true);
+  const [fontsLoaded] = useFonts({
+    Oswald_400Regular,
+  });
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 3000);
+    async function prepare() {
+      if (fontsLoaded) {
+        await SplashScreen.hideAsync();
+        setIsLoading(false);
+      }
+    }
+    prepare();
+  }, [fontsLoaded]);
 
-    return () => clearTimeout(timer);
-  }, []);
-
-  if (isLoading) {
+  if (!fontsLoaded || isLoading) {
     return <LoadingScreen />;
   }
 
@@ -110,7 +119,6 @@ function RootLayoutNav() {
     const setupUser = async () => {
       if (isLoaded && isSignedIn && userId && user) {
         try {
-          // Fetch user data from Supabase
           const { data: userData, error: userError } = await supabase
             .from('users')
             .select('id')
@@ -119,7 +127,6 @@ function RootLayoutNav() {
 
           if (userError) {
             if (userError.code === 'PGRST116') {
-              // User not found, create new user
               const { data: newUser, error: createError } = await supabase
                 .from('users')
                 .insert({
@@ -127,7 +134,6 @@ function RootLayoutNav() {
                   email: user.primaryEmailAddress?.emailAddress || '',
                   first_name: user.firstName || '',
                   last_name: user.lastName || '',
-                  // Add other fields as necessary
                 })
                 .select('id')
                 .single();
@@ -140,11 +146,9 @@ function RootLayoutNav() {
             }
           }
 
-          // User exists or has been created, safe to redirect
           router.replace('/(tabs)');
         } catch (error) {
           console.error('Error setting up user:', error);
-          // Handle error (e.g., show error message to user)
         }
       } else if (isLoaded && !isSignedIn) {
         router.replace('/(auth)/sign-in');

@@ -342,8 +342,9 @@ const styles = StyleSheet.create({
     right: 0,
     height: 1,
     borderTopWidth: 1,
-    borderColor: '#FFFFFF',
-    borderStyle: 'dotted',
+    // borderColor: '#FFFFFF',
+    // borderStyle: 'dotted',
+    // borderStyle: 'solid',
     zIndex: 0,
   },
   eventImage: {

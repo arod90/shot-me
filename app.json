@@ -2,7 +2,7 @@
   "expo": {
     "name": "shot-me",
     "slug": "shot-me",
-    "version": "1.0.4",
+    "version": "1.0.6",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "shotme",
@@ -18,17 +18,13 @@
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "This app needs access to your photo library for profile pictures",
         "NSPhotoLibraryAddUsageDescription": "This app needs access to save photos",
-        "UIBackgroundModes": [
-          "remote-notification"
-        ],
+        "UIBackgroundModes": ["remote-notification"],
         "NSCameraUsageDescription": "This app needs camera access to scan QR codes and take profile pictures",
         "NSMicrophoneUsageDescription": "This app needs microphone access for video features",
         "CFBundleDevelopmentRegion": "en",
         "UIRequiresFullScreen": true,
         "ITSAppUsesNonExemptEncryption": false,
-        "LSApplicationQueriesSchemes": [
-          "shotme"
-        ]
+        "LSApplicationQueriesSchemes": ["shotme"]
       },
       "config": {
         "usesNonExemptEncryption": false

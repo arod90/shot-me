@@ -187,14 +187,23 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 20,
     zIndex: 100,
   },
+  // dottedLine: {
+  //   position: 'absolute',
+  //   top: '59%',
+  //   left: 20,
+  //   right: 20,
+  //   borderTopWidth: 1,
+  //   borderTopColor: '#AAAAAA',
+  //   borderStyle: 'dotted',
+  //   zIndex: 99,
+  // },
   dottedLine: {
     position: 'absolute',
     top: '59%',
     left: 20,
     right: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#AAAAAA',
-    borderStyle: 'dotted',
+    // height: 0,
+    // backgroundColor: '#AAAAAA', // Use backgroundColor instead of border
     zIndex: 99,
   },
 });
