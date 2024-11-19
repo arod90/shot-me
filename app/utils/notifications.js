@@ -4,6 +4,12 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 export async function registerForPushNotificationsAsync() {
+  // Only proceed if not running in Expo Go
+  if (Constants.appOwnership === 'expo') {
+    console.log('Push notifications are not supported in Expo Go');
+    return null;
+  }
+
   let token;
 
   if (Platform.OS === 'android') {
@@ -25,7 +31,7 @@ export async function registerForPushNotificationsAsync() {
     }
     if (finalStatus !== 'granted') {
       alert('Failed to get push token for push notification!');
-      return;
+      return null;
     }
     token = (
       await Notifications.getExpoPushTokenAsync({
@@ -40,6 +46,11 @@ export async function registerForPushNotificationsAsync() {
 }
 
 export function setupNotifications(notificationHandler) {
+  // Only proceed if not running in Expo Go
+  if (Constants.appOwnership === 'expo') {
+    return () => {}; // Return empty cleanup function
+  }
+
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowAlert: true,
@@ -60,3 +71,9 @@ export function setupNotifications(notificationHandler) {
     Notifications.removeNotificationSubscription(responseListener);
   };
 }
+
+// Add default export to fix the warning
+export default {
+  registerForPushNotificationsAsync,
+  setupNotifications,
+};

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -12,41 +11,39 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   Alert,
-  Image,
+  SafeAreaView,
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { useSignUp } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { supabase } from '../../supabase';
-import { Ionicons } from '@expo/vector-icons'; // Make sure to install @expo/vector-icons if you haven't already
+import { Ionicons } from '@expo/vector-icons';
 
 export default function SignUpScreen() {
   const { isLoaded, signUp, setActive } = useSignUp();
   const router = useRouter();
+  const emailDebounceTimer = React.useRef(null);
 
+  // Form fields
   const [emailAddress, setEmailAddress] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [pendingVerification, setPendingVerification] = useState(false);
-  const [code, setCode] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState(new Date());
   const [phone, setPhone] = useState('');
+
+  // UI states
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
-  const [isEmailApproved, setIsEmailApproved] = useState(false);
+  const [pendingVerification, setPendingVerification] = useState(false);
+  const [code, setCode] = useState('');
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
 
-  const [emailError, setEmailError] = useState('');
-  const [passwordError, setPasswordError] = useState('');
-  const [confirmPasswordError, setConfirmPasswordError] = useState('');
-  const [phoneError, setPhoneError] = useState('');
-  const [dateError, setDateError] = useState('');
-
-  const [touchedInputs, setTouchedInputs] = useState({
+  // Touch tracking states
+  const [touched, setTouched] = useState({
     email: false,
     password: false,
     confirmPassword: false,
@@ -54,431 +51,420 @@ export default function SignUpScreen() {
     date: false,
   });
 
-  useEffect(() => {
-    if (touchedInputs.email) validateEmail();
-  }, [emailAddress, touchedInputs.email]);
+  // Validation states
+  const [formValidation, setFormValidation] = useState({
+    isEmailValid: false,
+    isPasswordValid: false,
+    isPasswordMatch: false,
+    isPhoneValid: false,
+    isAgeValid: false,
+  });
+
+  // Error messages
+  const [formErrors, setFormErrors] = useState({
+    email: '',
+    password: '',
+    confirmPassword: '',
+    phone: '',
+    date: '',
+  });
 
   useEffect(() => {
-    if (touchedInputs.password) validatePassword();
-  }, [password, touchedInputs.password]);
+    return () => {
+      if (emailDebounceTimer.current) {
+        clearTimeout(emailDebounceTimer.current);
+      }
+    };
+  }, []);
 
-  useEffect(() => {
-    if (touchedInputs.confirmPassword) validateConfirmPassword();
-  }, [password, confirmPassword, touchedInputs.confirmPassword]);
-
-  useEffect(() => {
-    if (touchedInputs.phone) validatePhone();
-  }, [phone, touchedInputs.phone]);
-
-  useEffect(() => {
-    if (touchedInputs.date) validateAge();
-  }, [dateOfBirth, touchedInputs.date]);
-
-  const validateEmail = async () => {
-    if (!emailAddress.trim()) {
-      setEmailError('El correo electrónico es requerido');
-      setIsEmailApproved(false);
-      return;
+  const validateEmail = async (email: string, shouldSetTouched = false) => {
+    if (shouldSetTouched) {
+      setTouched((prev) => ({ ...prev, email: true }));
     }
 
-    if (!/\S+@\S+\.\S+/.test(emailAddress)) {
-      setEmailError('El correo electrónico no es válido');
-      setIsEmailApproved(false);
-      return;
-    }
-
+    // Don't show any errors while checking
     setIsCheckingEmail(true);
-    const { data, error } = await supabase
-      .from('approved_emails')
-      .select('email')
-      .eq('email', emailAddress)
-      .single();
 
-    setIsCheckingEmail(false);
+    try {
+      // Basic format validation
+      if (!email.trim() || !/\S+@\S+\.\S+/.test(email)) {
+        setFormValidation((prev) => ({ ...prev, isEmailValid: false }));
+        // Only set error if the field was touched and we're not in the middle of typing
+        if (touched.email && !isCheckingEmail) {
+          setFormErrors((prev) => ({
+            ...prev,
+            email: 'El correo electrónico no es válido',
+          }));
+        }
+        return;
+      }
 
-    if (!error && data) {
-      setIsEmailApproved(true);
-      setEmailError('');
-    } else {
-      setIsEmailApproved(false);
-      setEmailError(
-        'Este correo electrónico no está aprobado para registrarse'
-      );
+      // Check with server
+      const { data } = await supabase
+        .from('approved_emails')
+        .select('email')
+        .eq('email', email)
+        .single();
+
+      if (data) {
+        setFormErrors((prev) => ({ ...prev, email: '' }));
+        setFormValidation((prev) => ({ ...prev, isEmailValid: true }));
+      } else {
+        setFormValidation((prev) => ({ ...prev, isEmailValid: false }));
+        // Only show the "not approved" message after server check completes
+        setFormErrors((prev) => ({
+          ...prev,
+          email: 'Este correo electrónico no está aprobado',
+        }));
+      }
+    } catch (error) {
+      setFormValidation((prev) => ({ ...prev, isEmailValid: false }));
+      // Only show error after server check fails
+      setFormErrors((prev) => ({
+        ...prev,
+        email: 'Error al verificar el correo electrónico',
+      }));
+    } finally {
+      setIsCheckingEmail(false);
     }
   };
 
-  //!TODO passwords in data breach trigger errors
+  const handleEmailChange = (text: string) => {
+    setEmailAddress(text);
 
-  const validatePassword = () => {
-    if (!password.trim()) {
-      setPasswordError('La contraseña es requerida');
-      return;
+    // Clear any existing timer
+    if (emailDebounceTimer.current) {
+      clearTimeout(emailDebounceTimer.current);
     }
 
-    if (!/^(?=.*[A-Za-z])(?=.*\d).{1,}$/.test(password)) {
-      setPasswordError(
-        'La contraseña debe contener al menos una letra y un número'
-      );
-      return;
+    // Clear errors while typing
+    setFormErrors((prev) => ({ ...prev, email: '' }));
+
+    // Set a new timer for validation
+    // @ts-ignore
+    emailDebounceTimer.current = setTimeout(() => {
+      validateEmail(text, true);
+    }, 1500);
+  };
+
+  const validatePassword = (value: string) => {
+    if (!touched.password) return;
+    const isValid = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(value);
+    setFormValidation((prev) => ({ ...prev, isPasswordValid: isValid }));
+    setFormErrors((prev) => ({
+      ...prev,
+      password: isValid
+        ? ''
+        : 'La contraseña debe tener al menos 8 caracteres, una letra y un número',
+    }));
+    validatePasswordMatch(value, confirmPassword);
+  };
+
+  const validatePasswordMatch = (pass: string, confirm: string) => {
+    if (!touched.confirmPassword) return;
+    const isMatch = pass === confirm && pass !== '';
+    setFormValidation((prev) => ({ ...prev, isPasswordMatch: isMatch }));
+    setFormErrors((prev) => ({
+      ...prev,
+      confirmPassword: isMatch ? '' : 'Las contraseñas no coinciden',
+    }));
+  };
+
+  const validatePhone = (value: string) => {
+    if (!touched.phone) return;
+    const isValid = /^0\d{9}$/.test(value);
+    setFormValidation((prev) => ({ ...prev, isPhoneValid: isValid }));
+    setFormErrors((prev) => ({
+      ...prev,
+      phone: isValid ? '' : 'El número debe tener 10 dígitos y empezar con 0',
+    }));
+  };
+
+  const validateAge = (date: Date) => {
+    if (!touched.date) return;
+    const age = new Date().getFullYear() - date.getFullYear();
+    const isValid = age >= 18;
+    setFormValidation((prev) => ({ ...prev, isAgeValid: isValid }));
+    setFormErrors((prev) => ({
+      ...prev,
+      date: isValid ? '' : 'Debes ser mayor de 18 años',
+    }));
+    return isValid;
+  };
+
+  const handleInputBlur = (field: keyof typeof touched) => {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+
+    switch (field) {
+      case 'email':
+        validateEmail(emailAddress, true);
+        break;
+      case 'password':
+        validatePassword(password);
+        break;
+      case 'confirmPassword':
+        validatePasswordMatch(password, confirmPassword);
+        break;
+      case 'phone':
+        validatePhone(phone);
+        break;
+      case 'date':
+        validateAge(dateOfBirth);
+        break;
     }
-
-    setPasswordError('');
   };
 
-  const validateConfirmPassword = () => {
-    if (password !== confirmPassword) {
-      setConfirmPasswordError('Las contraseñas no coinciden');
-    } else {
-      setConfirmPasswordError('');
-    }
+  const isFormValid = () => {
+    return (
+      Object.values(formValidation).every((value) => value === true) &&
+      firstName.trim() !== '' &&
+      lastName.trim() !== ''
+    );
   };
 
-  const validatePhone = () => {
-    if (!/^0\d{9}$/.test(phone)) {
-      setPhoneError(
-        'El número de teléfono debe tener 10 dígitos y comenzar con 0'
-      );
-    } else {
-      setPhoneError('');
-    }
-  };
-
-  const validateAge = () => {
-    const today = new Date();
-    const birthDate = new Date(dateOfBirth);
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const m = today.getMonth() - birthDate.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
-    }
-
-    if (age < 18) {
-      setDateError('Debes ser mayor de 18 años para registrarte');
-      return false;
-    } else {
-      setDateError('');
-      return true;
-    }
-  };
-
-  const showDatePicker = () => {
-    setDatePickerVisibility(true);
-  };
-
-  const hideDatePicker = () => {
-    setDatePickerVisibility(false);
-  };
-
-  const handleConfirm = (date) => {
-    setDateOfBirth(date);
-    setTouchedInputs((prev) => ({ ...prev, date: true }));
-    hideDatePicker();
-  };
-
-  const onSignUpPress = async () => {
-    setTouchedInputs({
-      email: true,
-      password: true,
-      confirmPassword: true,
-      phone: true,
-      date: true,
-    });
-
-    if (
-      !isLoaded ||
-      !isEmailApproved ||
-      passwordError ||
-      confirmPasswordError ||
-      phoneError ||
-      dateError ||
-      !validateAge()
-    )
-      return;
+  const handleSignUp = async () => {
+    if (!isLoaded || !isFormValid()) return;
 
     try {
       await signUp.create({
         emailAddress,
         password,
       });
-
       await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
       setPendingVerification(true);
     } catch (err) {
-      console.error(JSON.stringify(err, null, 2));
-      if (err.errors && err.errors[0].code === 'form_password_pwned') {
-        setPasswordError(
-          'Please choose a stronger password for your security.'
-        );
-      } else {
-        Alert.alert(
-          'Error',
-          'Error al registrarse. Por favor, inténtalo de nuevo.'
-        );
-      }
-    }
-  };
-
-  const onPressVerify = async () => {
-    if (!isLoaded) return;
-
-    try {
-      const completeSignUp = await signUp.attemptEmailAddressVerification({
-        code,
-      });
-
-      if (completeSignUp.status !== 'complete') {
-        console.log(JSON.stringify(completeSignUp, null, 2));
-        throw new Error('El estado del registro no está completo');
-      }
-
-      await setActive({ session: completeSignUp.createdSessionId });
-
-      const { data, error } = await supabase
-        .from('users')
-        .insert([
-          {
-            clerk_id: completeSignUp.createdUserId,
-            email: emailAddress,
-            first_name: firstName,
-            last_name: lastName,
-            date_of_birth: dateOfBirth.toISOString().split('T')[0],
-            phone: phone,
-          },
-        ])
-        .select();
-
-      if (error) {
-        console.error(
-          'Error al almacenar los datos del usuario en Supabase:',
-          error.message,
-          error.details,
-          error.hint
-        );
-        Alert.alert(
-          'Error',
-          'Error al almacenar los datos del usuario. Por favor, inténtalo de nuevo.'
-        );
-      } else {
-        console.log('Datos del usuario almacenados en Supabase:', data);
-        await SecureStore.setItemAsync(
-          'userToken',
-          completeSignUp.createdSessionId
-        );
-        router.replace('/(tabs)');
-      }
-    } catch (err) {
-      console.error(JSON.stringify(err, null, 2));
       Alert.alert(
         'Error',
-        'Error al verificar el correo electrónico. Por favor, inténtalo de nuevo.'
+        'Error al registrarse. Por favor, inténtalo de nuevo.'
       );
     }
   };
 
+  const handleVerification = async () => {
+    if (!isLoaded || !code) return;
+    try {
+      const result = await signUp.attemptEmailAddressVerification({ code });
+      if (result.status === 'complete') {
+        await setActive({ session: result.createdSessionId });
+        const { error } = await supabase.from('users').insert([
+          {
+            clerk_id: result.createdUserId,
+            email: emailAddress,
+            first_name: firstName,
+            last_name: lastName,
+            date_of_birth: dateOfBirth.toISOString().split('T')[0],
+            phone,
+          },
+        ]);
+        if (error) throw error;
+        // @ts-ignore
+        await SecureStore.setItemAsync('userToken', result.createdSessionId);
+        router.replace('/(tabs)');
+      }
+    } catch (err) {
+      Alert.alert('Error', 'Error en la verificación');
+    }
+  };
+
+  if (pendingVerification) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.form}>
+          <Text style={styles.header}>Verificación</Text>
+          <TextInput
+            style={styles.input}
+            value={code}
+            placeholder="Código de verificación"
+            placeholderTextColor="#666"
+            onChangeText={setCode}
+          />
+          <TouchableOpacity style={styles.button} onPress={handleVerification}>
+            <Text style={styles.buttonText}>Verificar</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <ScrollView contentContainerStyle={styles.scrollContainer}>
-          <View style={styles.formContainer}>
-            <Text style={styles.headerText}>Regístrate</Text>
-            {!pendingVerification && (
-              <>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Correo electrónico</Text>
-                  <TextInput
-                    autoCapitalize="none"
-                    value={emailAddress}
-                    placeholder="Correo electrónico..."
-                    onChangeText={(email) => setEmailAddress(email)}
-                    onBlur={() =>
-                      setTouchedInputs((prev) => ({ ...prev, email: true }))
-                    }
-                    style={[
-                      styles.input,
-                      isEmailApproved && styles.approvedEmailInput,
-                    ]}
-                    placeholderTextColor="#666"
-                  />
-                  {isCheckingEmail && (
-                    <Text style={styles.checkingText}>Verificando...</Text>
-                  )}
-                  {!isCheckingEmail && isEmailApproved && (
-                    <Text style={styles.approvedText}>Close Friend</Text>
-                  )}
-                  {touchedInputs.email && emailError ? (
-                    <Text style={styles.errorText}>{emailError}</Text>
-                  ) : null}
-                </View>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Contraseña</Text>
-                  <View style={styles.passwordContainer}>
-                    <TextInput
-                      value={password}
-                      placeholder="Contraseña..."
-                      secureTextEntry={!showPassword}
-                      onChangeText={(password) => setPassword(password)}
-                      onBlur={() =>
-                        setTouchedInputs((prev) => ({
-                          ...prev,
-                          password: true,
-                        }))
-                      }
-                      style={styles.passwordInput}
-                      placeholderTextColor="#666"
-                    />
-                    <TouchableOpacity
-                      style={styles.eyeIcon}
-                      onPress={() => setShowPassword(!showPassword)}
-                    >
-                      <Ionicons
-                        name={showPassword ? 'eye-off' : 'eye'}
-                        size={24}
-                        color="#666"
-                      />
-                    </TouchableOpacity>
-                  </View>
-                  {touchedInputs.password && passwordError ? (
-                    <Text style={styles.errorText}>{passwordError}</Text>
-                  ) : null}
-                </View>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Confirmar Contraseña</Text>
-                  <View style={styles.passwordContainer}>
-                    <TextInput
-                      value={confirmPassword}
-                      placeholder="Confirmar Contraseña..."
-                      secureTextEntry={!showConfirmPassword}
-                      onChangeText={(confirmPass) =>
-                        setConfirmPassword(confirmPass)
-                      }
-                      onBlur={() =>
-                        setTouchedInputs((prev) => ({
-                          ...prev,
-                          confirmPassword: true,
-                        }))
-                      }
-                      style={styles.passwordInput}
-                      placeholderTextColor="#666"
-                    />
-                    <TouchableOpacity
-                      style={styles.eyeIcon}
-                      onPress={() =>
-                        setShowConfirmPassword(!showConfirmPassword)
-                      }
-                    >
-                      <Ionicons
-                        name={showConfirmPassword ? 'eye-off' : 'eye'}
-                        size={24}
-                        color="#666"
-                      />
-                    </TouchableOpacity>
-                  </View>
-                  {touchedInputs.confirmPassword && confirmPasswordError ? (
-                    <Text style={styles.errorText}>{confirmPasswordError}</Text>
-                  ) : null}
-                </View>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Nombre</Text>
-                  <TextInput
-                    value={firstName}
-                    placeholder="Nombre..."
-                    onChangeText={(name) => setFirstName(name)}
-                    style={styles.input}
-                    placeholderTextColor="#666"
-                  />
-                </View>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Apellido</Text>
-                  <TextInput
-                    value={lastName}
-                    placeholder="Apellido..."
-                    onChangeText={(name) => setLastName(name)}
-                    style={styles.input}
-                    placeholderTextColor="#666"
-                  />
-                </View>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Fecha de Nacimiento</Text>
-                  <TouchableOpacity
-                    onPress={showDatePicker}
-                    style={styles.datePickerButton}
-                  >
-                    <Text style={styles.datePickerButtonText}>
-                      {dateOfBirth.toLocaleDateString()}
-                    </Text>
-                  </TouchableOpacity>
-                  <DateTimePickerModal
-                    isVisible={isDatePickerVisible}
-                    mode="date"
-                    onConfirm={handleConfirm}
-                    onCancel={hideDatePicker}
-                    maximumDate={new Date()}
-                  />
-                  {touchedInputs.date && dateError ? (
-                    <Text style={styles.errorText}>{dateError}</Text>
-                  ) : null}
-                </View>
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Teléfono</Text>
-                  <TextInput
-                    value={phone}
-                    placeholder="0999705758"
-                    onChangeText={(phone) => setPhone(phone)}
-                    onBlur={() =>
-                      setTouchedInputs((prev) => ({ ...prev, phone: true }))
-                    }
-                    style={styles.input}
-                    placeholderTextColor="#666"
-                    keyboardType="numeric"
-                  />
-                  {touchedInputs.phone && phoneError ? (
-                    <Text style={styles.errorText}>{phoneError}</Text>
-                  ) : null}
-                </View>
-                <TouchableOpacity
-                  onPress={onSignUpPress}
-                  style={[
-                    styles.button,
-                    (!isEmailApproved ||
-                      passwordError ||
-                      confirmPasswordError ||
-                      phoneError ||
-                      dateError) &&
-                      styles.buttonDisabled,
-                  ]}
-                  disabled={
-                    !isEmailApproved ||
-                    passwordError ||
-                    confirmPasswordError ||
-                    phoneError ||
-                    dateError
-                  }
-                >
-                  <Text style={styles.buttonText}>Registrarse</Text>
-                </TouchableOpacity>
-              </>
-            )}
-            {pendingVerification && (
-              <>
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardView}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <ScrollView contentContainerStyle={styles.scrollContent}>
+            <View style={styles.form}>
+              <Text style={styles.header}>Registro</Text>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Email</Text>
                 <TextInput
-                  value={code}
-                  placeholder="Código de Verificación..."
-                  onChangeText={(code) => setCode(code)}
+                  style={[
+                    styles.input,
+                    formValidation.isEmailValid && styles.validInput,
+                  ]}
+                  value={emailAddress}
+                  onChangeText={handleEmailChange}
+                  onBlur={() => validateEmail(emailAddress, true)}
+                  placeholder="Email"
+                  placeholderTextColor="#666"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+                {isCheckingEmail ? (
+                  <Text style={styles.checkingText}>Verificando...</Text>
+                ) : formValidation.isEmailValid ? (
+                  <Text style={styles.success}>Close Friend</Text>
+                ) : emailAddress && touched.email && formErrors.email ? (
+                  <Text style={styles.error}>{formErrors.email}</Text>
+                ) : null}
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Contraseña</Text>
+                <View style={styles.passwordContainer}>
+                  <TextInput
+                    style={[styles.input, styles.passwordInput]}
+                    value={password}
+                    onChangeText={(text) => {
+                      setPassword(text);
+                      validatePassword(text);
+                    }}
+                    onBlur={() => handleInputBlur('password')}
+                    placeholder="Contraseña"
+                    placeholderTextColor="#666"
+                    secureTextEntry={!showPassword}
+                    textContentType="oneTimeCode"
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword(!showPassword)}
+                    style={styles.eyeIcon}
+                  >
+                    <Ionicons
+                      name={showPassword ? 'eye-off' : 'eye'}
+                      size={24}
+                      color="#666"
+                    />
+                  </TouchableOpacity>
+                </View>
+                {touched.password && formErrors.password ? (
+                  <Text style={styles.error}>{formErrors.password}</Text>
+                ) : null}
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Confirmar Contraseña</Text>
+                <View style={styles.passwordContainer}>
+                  <TextInput
+                    style={[styles.input, styles.passwordInput]}
+                    value={confirmPassword}
+                    onChangeText={(text) => {
+                      setConfirmPassword(text);
+                      validatePasswordMatch(password, text);
+                    }}
+                    onBlur={() => handleInputBlur('confirmPassword')}
+                    placeholder="Confirmar Contraseña"
+                    placeholderTextColor="#666"
+                    secureTextEntry={!showConfirmPassword}
+                    textContentType="oneTimeCode"
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                    style={styles.eyeIcon}
+                  >
+                    <Ionicons
+                      name={showConfirmPassword ? 'eye-off' : 'eye'}
+                      size={24}
+                      color="#666"
+                    />
+                  </TouchableOpacity>
+                </View>
+                {touched.confirmPassword && formErrors.confirmPassword ? (
+                  <Text style={styles.error}>{formErrors.confirmPassword}</Text>
+                ) : null}
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Nombre</Text>
+                <TextInput
                   style={styles.input}
+                  value={firstName}
+                  onChangeText={setFirstName}
+                  placeholder="Nombre"
                   placeholderTextColor="#666"
                 />
-                <TouchableOpacity onPress={onPressVerify} style={styles.button}>
-                  <Text style={styles.buttonText}>Verificar Correo</Text>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Apellido</Text>
+                <TextInput
+                  style={styles.input}
+                  value={lastName}
+                  onChangeText={setLastName}
+                  placeholder="Apellido"
+                  placeholderTextColor="#666"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Fecha de Nacimiento</Text>
+                <TouchableOpacity
+                  style={styles.dateButton}
+                  onPress={() => setDatePickerVisibility(true)}
+                >
+                  <Text style={styles.dateText}>
+                    {dateOfBirth.toLocaleDateString()}
+                  </Text>
                 </TouchableOpacity>
-              </>
-            )}
-          </View>
-        </ScrollView>
-      </TouchableWithoutFeedback>
-    </KeyboardAvoidingView>
+                {touched.date && formErrors.date ? (
+                  <Text style={styles.error}>{formErrors.date}</Text>
+                ) : null}
+              </View>
+
+              <DateTimePickerModal
+                isVisible={isDatePickerVisible}
+                mode="date"
+                onConfirm={(date) => {
+                  setDateOfBirth(date);
+                  validateAge(date);
+                  setDatePickerVisibility(false);
+                }}
+                onCancel={() => setDatePickerVisibility(false)}
+                maximumDate={new Date()}
+              />
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Teléfono</Text>
+                <TextInput
+                  style={styles.input}
+                  value={phone}
+                  onChangeText={(text) => {
+                    setPhone(text);
+                    validatePhone(text);
+                  }}
+                  onBlur={() => handleInputBlur('phone')}
+                  placeholder="0999999999"
+                  placeholderTextColor="#666"
+                  keyboardType="numeric"
+                />
+                {touched.phone && formErrors.phone ? (
+                  <Text style={styles.error}>{formErrors.phone}</Text>
+                ) : null}
+              </View>
+
+              <TouchableOpacity
+                style={[styles.button, !isFormValid() && styles.buttonDisabled]}
+                onPress={handleSignUp}
+                disabled={!isFormValid()}
+              >
+                <Text style={styles.buttonText}>Registrarse</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
@@ -487,15 +473,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000000',
   },
-  scrollContainer: {
+  keyboardView: {
+    flex: 1,
+  },
+  scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
     padding: 16,
   },
-  formContainer: {
+  form: {
     marginTop: 32,
   },
-  headerText: {
+  header: {
     marginBottom: 32,
     fontSize: 24,
     fontWeight: 'bold',
@@ -520,6 +509,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#727272',
   },
+  validInput: {
+    borderColor: '#4BB543',
+    borderWidth: 2,
+  },
   passwordContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -537,16 +530,23 @@ const styles = StyleSheet.create({
   eyeIcon: {
     padding: 10,
   },
-  approvedEmailInput: {
-    borderColor: '#4BB543',
-    borderWidth: 2,
+  dateButton: {
+    backgroundColor: '#333',
+    borderRadius: 4,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#727272',
   },
-  errorText: {
-    color: 'red',
+  dateText: {
+    color: 'white',
+    fontSize: 16,
+  },
+  error: {
+    color: '#FF5252',
     fontSize: 12,
     marginTop: 4,
   },
-  approvedText: {
+  success: {
     color: '#4BB543',
     fontSize: 12,
     marginTop: 4,
@@ -572,16 +572,5 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
-  },
-  datePickerButton: {
-    backgroundColor: '#333',
-    borderRadius: 4,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#727272',
-  },
-  datePickerButtonText: {
-    color: 'white',
-    fontSize: 16,
   },
 });

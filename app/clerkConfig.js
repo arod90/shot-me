@@ -13,3 +13,6 @@ export const ClerkWrapper = ({ children }) => (
     {children}
   </ClerkProvider>
 );
+
+// Add default export to fix the warning
+export default ClerkWrapper;

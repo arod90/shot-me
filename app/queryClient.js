@@ -8,3 +8,9 @@ export const queryClient = new QueryClient({
     },
   },
 });
+
+// Add a default export component to fix the warning
+const QueryClientComponent = () => null;
+QueryClientComponent.client = queryClient;
+
+export default QueryClientComponent;
