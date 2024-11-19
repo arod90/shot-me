@@ -9,7 +9,6 @@ import {
   ScrollView,
   RefreshControl,
   Image,
-  Animated,
   ActivityIndicator,
   SafeAreaView,
 } from 'react-native';
@@ -21,9 +20,15 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import Animated, {
+  useAnimatedStyle,
+  withTiming,
+  withDelay,
+  FadeInRight,
+  withSequence,
+} from 'react-native-reanimated';
 
 const screenWidth = Dimensions.get('window').width;
-
 const TICKETS_CACHE_KEY = 'tickets_cache';
 
 const useTickets = (userId) => {
@@ -66,6 +71,7 @@ const useTickets = (userId) => {
         TICKETS_CACHE_KEY,
         JSON.stringify(ticketsWithUserInfo)
       );
+
       return ticketsWithUserInfo;
     } catch (error) {
       console.error('Error fetching tickets:', error);
@@ -82,8 +88,6 @@ export default function TicketsScreen() {
   const { userId } = useAuth();
   const { data: tickets, isLoading, isError, refetch } = useTickets(userId);
   const router = useRouter();
-  const animatedValues = useRef({}).current;
-
   let [fontsLoaded] = useFonts({
     Oswald_400Regular,
   });
@@ -94,7 +98,6 @@ export default function TicketsScreen() {
         refetch();
       }
     });
-
     return () => unsubscribe();
   }, [refetch]);
 
@@ -128,35 +131,26 @@ export default function TicketsScreen() {
   }, []);
 
   const renderTicket = useCallback(
-    (item) => {
+    (item, index) => {
       const daysLeft = calculateDaysLeft(item.events.event_date);
-      const animatedValue = animatedValues[item.id] || new Animated.Value(1);
-
-      const animatedStyle = {
-        opacity: animatedValue,
-        transform: [
-          {
-            translateX: animatedValue.interpolate({
-              inputRange: [0, 1],
-              outputRange: [50, 0],
-            }),
-          },
-        ],
-      };
 
       return (
-        <Animated.View key={item.id} style={animatedStyle}>
+        <Animated.View
+          entering={FadeInRight.delay(index * 200).springify()}
+          key={item.id}
+          style={styles.ticketContainer}
+        >
           <TouchableOpacity
             onPress={() => goToDetails(item)}
             activeOpacity={0.9}
-            style={styles.ticketContainer}
+            style={styles.ticketContent}
           >
             <View style={styles.grooveLeft} />
             <View style={styles.grooveRight} />
             <View style={styles.daysContainer}>
               <Text style={styles.daysText}>{daysLeft} MORE DAYS</Text>
             </View>
-            <View style={styles.ticketContent}>
+            <View style={styles.ticketContentInner}>
               <View style={styles.textContainer}>
                 <Text style={styles.eventName}>{item.events.event_name}</Text>
                 <Text style={styles.eventDetails}>
@@ -176,23 +170,8 @@ export default function TicketsScreen() {
         </Animated.View>
       );
     },
-    [calculateDaysLeft, goToDetails, animatedValues]
+    [calculateDaysLeft, goToDetails]
   );
-
-  useEffect(() => {
-    if (tickets) {
-      tickets.forEach((ticket) => {
-        if (!animatedValues[ticket.id]) {
-          animatedValues[ticket.id] = new Animated.Value(0);
-        }
-        Animated.timing(animatedValues[ticket.id], {
-          toValue: 1,
-          duration: 500,
-          useNativeDriver: true,
-        }).start();
-      });
-    }
-  }, [tickets, animatedValues]);
 
   if (!fontsLoaded || isLoading) {
     return (
@@ -224,7 +203,7 @@ export default function TicketsScreen() {
           />
         }
       >
-        {tickets && tickets.map((ticket) => renderTicket(ticket))}
+        {tickets && tickets.map((ticket, index) => renderTicket(ticket, index))}
       </ScrollView>
     </SafeAreaView>
   );
@@ -265,17 +244,27 @@ const styles = StyleSheet.create({
     paddingTop: 10,
   },
   ticketContainer: {
-    backgroundColor: '#333333',
     marginBottom: 15,
+  },
+  ticketContent: {
+    backgroundColor: '#333333',
     borderRadius: 15,
     overflow: 'hidden',
     padding: 20,
     position: 'relative',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
     shadowOpacity: 0.8,
     shadowRadius: 2,
     elevation: 5,
+  },
+  ticketContentInner: {
+    marginTop: 30,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   grooveLeft: {
     position: 'absolute',
@@ -313,11 +302,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Oswald_400Regular',
     color: '#000000',
   },
-  ticketContent: {
-    marginTop: 30,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
   textContainer: {
     flex: 1,
   },
@@ -340,11 +324,6 @@ const styles = StyleSheet.create({
     top: '35%',
     left: 0,
     right: 0,
-    // height: 1,
-    // borderTopWidth: 1,
-    // borderColor: '#FFFFFF',
-    // borderStyle: 'dotted',
-    // borderStyle: 'solid',
     zIndex: 0,
   },
   eventImage: {

@@ -16,6 +16,11 @@ import { supabase } from '../../supabase';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
+import Animated, {
+  FadeInDown,
+  Layout,
+  SlideInDown,
+} from 'react-native-reanimated';
 
 export default function ProfileScreen() {
   const { userId } = useAuth();
@@ -23,15 +28,12 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
 
-  // console.log('User object:', user);
-
   useEffect(() => {
     fetchUserData();
   }, []);
 
   const fetchUserData = async () => {
     if (!userId) return;
-
     try {
       const { data: userData, error: userError } = await supabase
         .from('users')
@@ -40,7 +42,6 @@ export default function ProfileScreen() {
         .single();
 
       if (userError) throw userError;
-
       setUser(userData);
     } catch (error) {
       console.error('Error fetching user data:', error);
@@ -64,7 +65,6 @@ export default function ProfileScreen() {
 
   const uploadImage = async (uri) => {
     setUploading(true);
-
     try {
       const fileInfo = await FileSystem.getInfoAsync(uri);
       if (!fileInfo.exists) {
@@ -73,7 +73,6 @@ export default function ProfileScreen() {
 
       const fileExtension = uri.split('.').pop();
       const fileName = `${user.id}-${Date.now()}.${fileExtension}`;
-
       const { uri: fileUri } = await FileSystem.getInfoAsync(uri);
       const base64 = await FileSystem.readAsStringAsync(fileUri, {
         encoding: FileSystem.EncodingType.Base64,
@@ -85,9 +84,7 @@ export default function ProfileScreen() {
           contentType: `image/${fileExtension}`,
         });
 
-      if (uploadError) {
-        throw uploadError;
-      }
+      if (uploadError) throw uploadError;
 
       const { data } = supabase.storage.from('avatars').getPublicUrl(fileName);
 
@@ -96,12 +93,9 @@ export default function ProfileScreen() {
         .update({ avatar_url: data.publicUrl })
         .eq('id', user.id);
 
-      if (updateError) {
-        throw updateError;
-      }
+      if (updateError) throw updateError;
 
       setUser({ ...user, avatar_url: data.publicUrl });
-      console.log('Updated avatar URL:', data.publicUrl);
       Alert.alert('Success', 'Profile picture updated successfully');
     } catch (error) {
       console.error('Error uploading image:', error);
@@ -162,11 +156,10 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
-        {/* <View style={styles.header}>
-          <Text style={styles.headerText}>Profile</Text>
-        </View> */}
-
-        <View style={styles.avatarContainer}>
+        <Animated.View
+          entering={FadeInDown.delay(100).springify()}
+          style={styles.avatarContainer}
+        >
           <TouchableOpacity onPress={pickImage} disabled={uploading}>
             {user.avatar_url ? (
               <Image source={{ uri: user.avatar_url }} style={styles.avatar} />
@@ -181,36 +174,51 @@ export default function ProfileScreen() {
               </View>
             )}
           </TouchableOpacity>
-        </View>
+        </Animated.View>
 
-        <View style={styles.infoContainer}>
-          <View style={styles.infoItem}>
+        <Animated.View
+          entering={FadeInDown.delay(200).springify()}
+          style={styles.infoContainer}
+        >
+          <Animated.View
+            entering={FadeInDown.delay(300).springify()}
+            style={styles.infoItem}
+          >
             <Ionicons name="person-outline" size={24} color="#FF5252" />
             <View style={styles.infoTextContainer}>
               <Text style={styles.infoLabel}>Name</Text>
-              <Text
-                style={styles.infoText}
-              >{`${user.first_name} ${user.last_name}`}</Text>
+              <Text style={styles.infoText}>
+                {`${user.first_name} ${user.last_name}`}
+              </Text>
             </View>
-          </View>
+          </Animated.View>
 
-          <View style={styles.infoItem}>
+          <Animated.View
+            entering={FadeInDown.delay(400).springify()}
+            style={styles.infoItem}
+          >
             <Ionicons name="mail-outline" size={24} color="#FF5252" />
             <View style={styles.infoTextContainer}>
               <Text style={styles.infoLabel}>Email</Text>
               <Text style={styles.infoText}>{user.email}</Text>
             </View>
-          </View>
+          </Animated.View>
 
-          <View style={styles.infoItem}>
+          <Animated.View
+            entering={FadeInDown.delay(500).springify()}
+            style={styles.infoItem}
+          >
             <Ionicons name="call-outline" size={24} color="#FF5252" />
             <View style={styles.infoTextContainer}>
               <Text style={styles.infoLabel}>Phone</Text>
               <Text style={styles.infoText}>{user.phone}</Text>
             </View>
-          </View>
+          </Animated.View>
 
-          <View style={styles.infoItem}>
+          <Animated.View
+            entering={FadeInDown.delay(600).springify()}
+            style={styles.infoItem}
+          >
             <Ionicons name="calendar-outline" size={24} color="#FF5252" />
             <View style={styles.infoTextContainer}>
               <Text style={styles.infoLabel}>Date of Birth</Text>
@@ -218,9 +226,12 @@ export default function ProfileScreen() {
                 {new Date(user.date_of_birth).toLocaleDateString()}
               </Text>
             </View>
-          </View>
+          </Animated.View>
 
-          <View style={styles.infoItem}>
+          <Animated.View
+            entering={FadeInDown.delay(700).springify()}
+            style={styles.infoItem}
+          >
             <Ionicons name="hourglass-outline" size={24} color="#FF5252" />
             <View style={styles.infoTextContainer}>
               <Text style={styles.infoLabel}>Age</Text>
@@ -228,16 +239,19 @@ export default function ProfileScreen() {
                 {calculateAge(user.date_of_birth)} years
               </Text>
             </View>
-          </View>
+          </Animated.View>
 
-          <View style={styles.infoItem}>
+          <Animated.View
+            entering={FadeInDown.delay(800).springify()}
+            style={styles.infoItem}
+          >
             <Ionicons name="ticket-outline" size={24} color="#FF5252" />
             <View style={styles.infoTextContainer}>
               <Text style={styles.infoLabel}>Events Attended</Text>
               <Text style={styles.infoText}>{user.events_attended || 0}</Text>
             </View>
-          </View>
-        </View>
+          </Animated.View>
+        </Animated.View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -262,17 +276,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     textAlign: 'center',
     marginTop: 20,
-  },
-  header: {
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333333',
-  },
-  headerText: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    fontFamily: 'Oswald_600SemiBold',
   },
   avatarContainer: {
     alignItems: 'center',
