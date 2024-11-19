@@ -48,6 +48,7 @@
       "expo-notifications",
       "expo-image-picker",
       "expo-file-system",
+
       [
         "expo-updates",
         {
