@@ -4,12 +4,6 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 export async function registerForPushNotificationsAsync() {
-  // Only proceed if not running in Expo Go
-  if (Constants.appOwnership === 'expo') {
-    console.log('Push notifications are not supported in Expo Go');
-    return null;
-  }
-
   let token;
 
   if (Platform.OS === 'android') {
@@ -25,32 +19,33 @@ export async function registerForPushNotificationsAsync() {
     const { status: existingStatus } =
       await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
+
     if (existingStatus !== 'granted') {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }
+
     if (finalStatus !== 'granted') {
-      alert('Failed to get push token for push notification!');
+      console.log('Failed to get push token for push notification!');
       return null;
     }
-    token = (
-      await Notifications.getExpoPushTokenAsync({
+
+    try {
+      token = await Notifications.getExpoPushTokenAsync({
         projectId: Constants.expoConfig.extra.eas.projectId,
-      })
-    ).data;
+      });
+    } catch (error) {
+      console.log('Error getting push token:', error);
+      return null;
+    }
   } else {
-    alert('Must use physical device for Push Notifications');
+    console.log('Must use physical device for Push Notifications');
   }
 
-  return token;
+  return token?.data;
 }
 
 export function setupNotifications(notificationHandler) {
-  // Only proceed if not running in Expo Go
-  if (Constants.appOwnership === 'expo') {
-    return () => {}; // Return empty cleanup function
-  }
-
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowAlert: true,
@@ -61,6 +56,7 @@ export function setupNotifications(notificationHandler) {
 
   const notificationListener =
     Notifications.addNotificationReceivedListener(notificationHandler);
+
   const responseListener =
     Notifications.addNotificationResponseReceivedListener((response) => {
       console.log(response);
@@ -72,7 +68,6 @@ export function setupNotifications(notificationHandler) {
   };
 }
 
-// Add default export to fix the warning
 export default {
   registerForPushNotificationsAsync,
   setupNotifications,
