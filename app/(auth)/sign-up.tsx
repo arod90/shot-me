@@ -485,8 +485,9 @@ const styles = StyleSheet.create({
     marginTop: 32,
   },
   header: {
-    marginBottom: 32,
-    fontSize: 24,
+    marginBottom: 10,
+    fontFamily: 'Oswald_400Regular',
+    fontSize: 32,
     fontWeight: 'bold',
     color: 'white',
     textAlign: 'center',
