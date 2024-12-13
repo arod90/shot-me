@@ -20,65 +20,96 @@ import {
 import { supabase } from '../../supabase';
 import { Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useQuery } from '@tanstack/react-query';
+import Modal from 'react-native-modal';
 import {
   useFonts,
+  Oswald_400Regular,
   Oswald_600SemiBold,
   BebasNeue_400Regular,
 } from '@expo-google-fonts/dev';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useQuery } from '@tanstack/react-query';
 
 const EVENTS_CACHE_KEY = 'events_cache';
 const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes
 
-const useEvents = () => {
-  const fetchEvents = async () => {
+export default function EventsScreen() {
+  let [fontsLoaded] = useFonts({
+    Oswald_400Regular,
+    Oswald_600SemiBold,
+    BebasNeue_400Regular,
+  });
+  const [selectedVenue, setSelectedVenue] = useState(null);
+  const [showVenueDropdown, setShowVenueDropdown] = useState(false);
+  const [animated, setAnimated] = useState(false);
+  const animatedValues = useRef({}).current;
+
+  const { data: venues = [] } = useQuery(['venues'], fetchVenues);
+  const {
+    data: events = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery(['events', selectedVenue], () => fetchEvents(selectedVenue));
+
+  async function fetchVenues() {
+    const { data, error } = await supabase
+      .from('venues')
+      .select('id, name')
+      .order('name');
+
+    if (error) throw error;
+    return data;
+  }
+
+  async function fetchEvents(venueId) {
     const cachedData = await AsyncStorage.getItem(EVENTS_CACHE_KEY);
     if (cachedData) {
       const { data, timestamp } = JSON.parse(cachedData);
       if (Date.now() - timestamp < CACHE_EXPIRY) {
-        return data;
+        return venueId
+          ? data.filter((event) => event.venue_id === venueId)
+          : data;
       }
     }
 
-    const { data: Events, error } = await supabase.from('events').select('*');
-    if (error) throw error;
+    let query = supabase
+      .from('events')
+      .select(
+        `
+      *,
+      venues (
+        id,
+        name
+      )
+    `
+      )
+      .gte('event_date', new Date().toISOString()); // Only fetch upcoming events
 
-    const sortedEvents = Events.sort(
-      (a, b) => new Date(a.event_date) - new Date(b.event_date)
-    );
+    if (venueId) {
+      query = query.eq('venue_id', venueId);
+    }
+
+    const { data: Events, error } = await query.order('event_date', {
+      ascending: true,
+    });
+
+    if (error) throw error;
 
     await AsyncStorage.setItem(
       EVENTS_CACHE_KEY,
-      JSON.stringify({ data: sortedEvents, timestamp: Date.now() })
+      JSON.stringify({
+        data: Events,
+        timestamp: Date.now(),
+      })
     );
-    return sortedEvents;
-  };
 
-  return useQuery(['events'], fetchEvents, {
-    staleTime: CACHE_EXPIRY,
-  });
-};
+    return Events;
+  }
 
-export default function EventsScreen() {
-  const { data: events, isLoading, isError, refetch } = useEvents();
-  const [animated, setAnimated] = useState(false);
-  const animatedValues = useRef({}).current;
-
-  let [fontsLoaded] = useFonts({
-    Oswald_600SemiBold,
-    BebasNeue_400Regular,
-  });
-
-  const onRefresh = useCallback(() => {
-    refetch();
-  }, [refetch]);
-
-  const memoizedEvents = useMemo(() => events || [], [events]);
-
-  const animateEvents = useCallback(
-    (eventsData) => {
-      eventsData.forEach((event, index) => {
+  useEffect(() => {
+    if (events?.length > 0) {
+      events.forEach((event) => {
         if (!animatedValues[event.id]) {
           animatedValues[event.id] = {
             date: new Animated.Value(0),
@@ -93,8 +124,7 @@ export default function EventsScreen() {
       });
 
       setAnimated(true);
-
-      eventsData.forEach((event, index) => {
+      events.forEach((event, index) => {
         const delay = index * 100;
         ['date', 'name', 'location'].forEach((prop, propIndex) => {
           Animated.timing(animatedValues[event.id][prop], {
@@ -105,15 +135,8 @@ export default function EventsScreen() {
           }).start();
         });
       });
-    },
-    [animatedValues]
-  );
-
-  useEffect(() => {
-    if (memoizedEvents.length > 0) {
-      animateEvents(memoizedEvents);
     }
-  }, [memoizedEvents, animateEvents]);
+  }, [events]);
 
   const getAnimatedStyle = useCallback(
     (eventId, prop) => {
@@ -161,7 +184,9 @@ export default function EventsScreen() {
             ]}
           >
             <Ionicons name="location-outline" size={20} color="#FF5252" />
-            <Text style={styles.eventLocation}>{item.location}</Text>
+            <Text style={styles.eventLocation}>
+              {item.venues ? item.venues.name : item.location}
+            </Text>
           </Animated.View>
         </TouchableOpacity>
       </Link>
@@ -169,17 +194,9 @@ export default function EventsScreen() {
     [getAnimatedStyle]
   );
 
-  if (!fontsLoaded || isLoading) {
-    return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FF5252" />
-      </SafeAreaView>
-    );
-  }
-
   if (isError) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
+      <SafeAreaView style={styles.container}>
         <Text style={styles.errorText}>Error loading events</Text>
       </SafeAreaView>
     );
@@ -187,19 +204,106 @@ export default function EventsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <FlatList
-        data={memoizedEvents}
-        renderItem={renderEvent}
-        keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={isLoading}
-            onRefresh={onRefresh}
-            colors={['#FF5252']}
-          />
-        }
-      />
+      <Text style={styles.header}>Events</Text>
+      <View style={styles.filterContainer}>
+        <TouchableOpacity
+          style={styles.venueSelector}
+          onPress={() => setShowVenueDropdown(true)}
+        >
+          <Text style={styles.venueSelectorText}>
+            {selectedVenue
+              ? venues?.find((v) => v.id === selectedVenue)?.name
+              : 'All Venues'}
+          </Text>
+          <Ionicons name="chevron-down" size={20} color="#FF5252" />
+        </TouchableOpacity>
+      </View>
+
+      <Modal
+        isVisible={showVenueDropdown}
+        onBackdropPress={() => setShowVenueDropdown(false)}
+        onSwipeComplete={() => setShowVenueDropdown(false)}
+        swipeDirection={['down']}
+        style={styles.modal}
+        propagateSwipe
+        useNativeDriver
+        backdropOpacity={0.5}
+        animationIn="slideInUp"
+        animationOut="slideOutDown"
+        animationInTiming={300}
+        animationOutTiming={300}
+        backdropTransitionInTiming={300}
+        backdropTransitionOutTiming={300}
+        hideModalContentWhileAnimating={true}
+      >
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <View style={styles.modalHandle} />
+          </View>
+          <Text style={styles.modalTitle}>Select Venue</Text>
+          <TouchableOpacity
+            style={[styles.venueOption, !selectedVenue && styles.selectedVenue]}
+            onPress={() => {
+              setSelectedVenue(null);
+              setShowVenueDropdown(false);
+            }}
+          >
+            <Text
+              style={[
+                styles.venueOptionText,
+                !selectedVenue && styles.selectedVenueText,
+              ]}
+            >
+              All Venues
+            </Text>
+          </TouchableOpacity>
+          {venues?.map((venue) => (
+            <TouchableOpacity
+              key={venue.id}
+              style={[
+                styles.venueOption,
+                selectedVenue === venue.id && styles.selectedVenue,
+              ]}
+              onPress={() => {
+                setSelectedVenue(venue.id);
+                setShowVenueDropdown(false);
+              }}
+            >
+              <Text
+                style={[
+                  styles.venueOptionText,
+                  selectedVenue === venue.id && styles.selectedVenueText,
+                ]}
+              >
+                {venue.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </Modal>
+
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#FF5252" />
+        </View>
+      ) : (
+        <FlatList
+          data={events}
+          renderItem={renderEvent}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={isLoading}
+              onRefresh={refetch}
+              colors={['#FF5252']}
+            />
+          }
+          ListEmptyComponent={
+            <Text style={styles.emptyText}>No events found</Text>
+          }
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -209,16 +313,98 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000000',
   },
+  header: {
+    fontSize: 35,
+    color: '#FF5252',
+    fontFamily: 'Oswald_400Regular',
+    textAlign: 'center',
+    marginVertical: 0,
+  },
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#000000',
     justifyContent: 'center',
     alignItems: 'center',
   },
   errorText: {
     color: '#FF5252',
-    fontSize: 18,
-    fontFamily: 'Oswald_600SemiBold',
+    fontSize: 16,
+    textAlign: 'center',
+    marginTop: 20,
+    fontFamily: 'Oswald_400Regular',
+  },
+  emptyText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    textAlign: 'center',
+    marginTop: 20,
+    fontFamily: 'Oswald_400Regular',
+  },
+  filterContainer: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333333',
+  },
+  venueSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#1A1A1A',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#333333',
+  },
+  venueSelectorText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontFamily: 'Oswald_400Regular',
+  },
+  modal: {
+    margin: 0,
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#1A1A1A',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 16,
+    paddingBottom: 32,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#333333',
+    borderRadius: 2,
+  },
+  modalTitle: {
+    fontSize: 20,
+    color: '#FFFFFF',
+    fontFamily: 'Oswald_400Regular',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  venueOption: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: '#262C36',
+  },
+  selectedVenue: {
+    backgroundColor: '#FF5252',
+  },
+  venueOptionText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontFamily: 'Oswald_400Regular',
+  },
+  selectedVenueText: {
+    fontWeight: '600',
   },
   listContent: {
     padding: 24,
@@ -245,7 +431,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   eventLocation: {
-    fontFamily: 'Oswald_600SemiBold',
+    fontFamily: 'Oswald_400Regular',
     color: '#B0B0B0',
     fontSize: 18,
     marginLeft: 8,

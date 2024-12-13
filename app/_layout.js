@@ -229,6 +229,16 @@ function RootLayoutNav() {
           }}
         />
         <Stack.Screen
+          name="venue/[id]"
+          options={{
+            presentation: 'modal',
+            animation: 'slide_from_right',
+            contentStyle: { backgroundColor: '#000000' },
+            gestureEnabled: true,
+            gestureDirection: 'horizontal',
+          }}
+        />
+        <Stack.Screen
           name="mock-payment/index"
           options={{
             presentation: 'modal',

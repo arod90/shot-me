@@ -253,7 +253,21 @@ export default function EventDetailScreen() {
           <Text style={styles.eventName}>{event.event_name.toUpperCase()}</Text>
           <View style={styles.locationContainer}>
             <Ionicons name="location-outline" size={24} color="#FF5252" />
-            <Text style={styles.eventLocation}>{event.location}</Text>
+            <TouchableOpacity
+              onPress={() =>
+                event.venue_id && router.push(`/venue/${event.venue_id}`)
+              }
+              style={styles.locationButton}
+            >
+              <Text
+                style={[
+                  styles.eventLocation,
+                  event.venue_id && styles.linkText,
+                ]}
+              >
+                {event.venues ? event.venues.name : event.location}
+              </Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.additionalDetailsContainer}>
