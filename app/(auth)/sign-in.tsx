@@ -18,7 +18,7 @@ import {
 import * as SecureStore from 'expo-secure-store';
 import { useSignIn, useAuth } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
-import { supabase } from '../../supabase';
+import { supabase } from '../../lib/supabase';
 
 export default function SignInScreen() {
   const { signIn, setActive, isLoaded } = useSignIn();

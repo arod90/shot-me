@@ -13,7 +13,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { supabase } from '../../supabase';
+import { supabase } from '../../lib/supabase';
 import { useAuth } from '@clerk/clerk-expo';
 import { Oswald_400Regular, useFonts } from '@expo-google-fonts/dev';
 import { Ionicons } from '@expo/vector-icons';

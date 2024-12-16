@@ -12,7 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import { useAuth } from '@clerk/clerk-expo';
-import { supabase } from '../../supabase';
+import { supabase } from '../../lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';

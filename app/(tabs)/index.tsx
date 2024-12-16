@@ -17,11 +17,12 @@ import {
   Animated,
   ActivityIndicator,
 } from 'react-native';
-import { supabase } from '../../supabase';
+import { supabase } from '../../lib/supabase';
 import { Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery } from '@tanstack/react-query';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Modal from 'react-native-modal';
 import {
   useFonts,
@@ -29,6 +30,7 @@ import {
   Oswald_600SemiBold,
   BebasNeue_400Regular,
 } from '@expo-google-fonts/dev';
+import { format } from 'date-fns';
 
 const EVENTS_CACHE_KEY = 'events_cache';
 const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes

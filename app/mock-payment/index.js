@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { supabase } from '../../supabase';
+import { supabase } from '../../lib/supabase';
 import { useAuth, useUser } from '@clerk/clerk-expo';
 
 export default function MockPayment() {

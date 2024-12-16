@@ -10,7 +10,7 @@ import { View, ActivityIndicator, Linking, StyleSheet } from 'react-native';
 import LoadingScreen from '../components/LoadingScreen';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './queryClient';
-import { supabase } from '../supabase';
+import { supabase } from '../lib/supabase';
 import {
   registerForPushNotificationsAsync,
   setupNotifications,

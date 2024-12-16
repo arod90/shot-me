@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import MapView, { Marker } from 'react-native-maps';
-import { supabase } from '../../supabase';
+import { supabase } from '../../lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function VenueDetailScreen() {
