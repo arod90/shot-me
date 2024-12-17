@@ -1,20 +1,20 @@
 // @ts-nocheck
+'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
+  ScrollView,
   SafeAreaView,
+  ActivityIndicator,
+  TouchableOpacity,
   Image,
-  FlatList,
-  Animated,
-  Platform,
-  ActionSheetIOS,
   Alert,
+  Animated,
 } from 'react-native';
 import { supabase } from '../../lib/supabase';
-import { format } from 'date-fns';
+import { format, addHours, subHours, isWithinInterval } from 'date-fns';
 import defaultLogo from '../../assets/images/logo-blanco.png';
 import { useAuth } from '@clerk/clerk-expo';
 import TimelineItem from '../../components/Timeline/TimelineItem';
@@ -40,35 +40,40 @@ export default function Tonight() {
   const [menuItems, setMenuItems] = useState([]);
   const timelineRef = useRef(null);
   const lineHeightAnim = useRef(new Animated.Value(0)).current;
+  const [isCheckedIn, setIsCheckedIn] = useState(false);
 
-  // Real-time subscription references to clean up
   const timelineSubscriptionRef = useRef(null);
   const checkinsSubscriptionRef = useRef(null);
   const reactionsSubscriptionRef = useRef(null);
 
   useEffect(() => {
-    fetchTodaysEvents();
-    const eventsSubscription = supabase
-      .channel('events-changes')
+    checkUserCheckedIn();
+
+    const subscription = supabase
+      .channel('checkins-channel')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'events' },
-        () => fetchTodaysEvents()
+        { event: '*', schema: 'public', table: 'checkins' },
+        () => {
+          checkUserCheckedIn();
+        }
+      )
+      .subscribe();
+
+    const usereventsSubscription = supabase
+      .channel('userevents-channel')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'userevents' },
+        () => {
+          checkUserCheckedIn();
+        }
       )
       .subscribe();
 
     return () => {
-      eventsSubscription.unsubscribe();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (selectedEvent) {
-      fetchTimelineEvents();
-      fetchCheckedInPeople();
-      fetchMenuItems();
-
-      // Clean up any existing subscriptions first
+      subscription.unsubscribe();
+      usereventsSubscription.unsubscribe();
       if (timelineSubscriptionRef.current) {
         timelineSubscriptionRef.current.unsubscribe();
       }
@@ -78,8 +83,136 @@ export default function Tonight() {
       if (reactionsSubscriptionRef.current) {
         reactionsSubscriptionRef.current.unsubscribe();
       }
+    };
+  }, [userId]);
 
-      // Set up timeline events real-time subscription
+  useEffect(() => {
+    if (selectedEvent) {
+      fetchTimelineEvents();
+      fetchCheckedInPeople();
+      fetchMenuItems();
+    }
+  }, [selectedEvent]);
+
+  const checkUserCheckedIn = async () => {
+    if (!userId) return;
+
+    try {
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('clerk_id', userId)
+        .single();
+
+      if (userError) {
+        console.error('Error fetching user:', userError);
+        return;
+      }
+
+      const now = new Date();
+
+      const { data: events } = await supabase
+        .from('events')
+        .select('*')
+        .order('event_date', { ascending: true });
+
+      const activeEvent = events?.find((event) => {
+        const eventDate = new Date(event.event_date);
+        const eventWindow = {
+          start: subHours(eventDate, 2),
+          end: addHours(eventDate, 36),
+        };
+        return isWithinInterval(now, eventWindow);
+      });
+
+      if (activeEvent) {
+        const { data: checkIn } = await supabase
+          .from('checkins')
+          .select('*')
+          .eq('user_id', userData.id)
+          .eq('event_id', activeEvent.id)
+          .single();
+
+        if (checkIn) {
+          setIsCheckedIn(true);
+          setSelectedEvent(activeEvent);
+          fetchTimelineEvents();
+          fetchCheckedInPeople();
+          fetchMenuItems();
+        } else {
+          setIsCheckedIn(false);
+          setSelectedEvent(null);
+        }
+      } else {
+        setIsCheckedIn(false);
+        setSelectedEvent(null);
+      }
+    } catch (error) {
+      console.error('Error checking user check-in:', error);
+      setIsCheckedIn(false);
+      setSelectedEvent(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchTimelineEvents = async () => {
+    if (!selectedEvent) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('timeline_events')
+        .select(
+          `
+          *,
+          users (
+            id,
+            first_name,
+            last_name,
+            avatar_url
+          )
+        `
+        )
+        .eq('event_id', selectedEvent.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const eventsWithReactions = await Promise.all(
+        data.map(async (event) => {
+          const { data: reactions } = await supabase
+            .from('timeline_event_reactions')
+            .select('reaction')
+            .eq('timeline_event_id', event.id);
+
+          const reactionCounts = reactions?.reduce((acc, curr) => {
+            acc[curr.reaction] = (acc[curr.reaction] || 0) + 1;
+            return acc;
+          }, {});
+
+          return {
+            ...event,
+            reactions: reactionCounts || {},
+            created_at: new Date(event.created_at).getTime(),
+            uniqueKey: `${event.id}-${event.created_at}`,
+          };
+        })
+      );
+
+      setTimelineEvents(eventsWithReactions);
+
+      // Set up subscriptions for real-time updates
+      setupSubscriptions();
+    } catch (error) {
+      console.error('Error fetching timeline events:', error);
+    }
+  };
+
+  const setupSubscriptions = () => {
+    if (!selectedEvent) return;
+
+    // Timeline events subscription
+    if (!timelineSubscriptionRef.current) {
       const timelineChannel = supabase
         .channel(`timeline-${selectedEvent.id}`)
         .on(
@@ -90,14 +223,15 @@ export default function Tonight() {
             table: 'timeline_events',
             filter: `event_id=eq.${selectedEvent.id}`,
           },
-          (payload) => {
-            console.log('Timeline event change detected:', payload);
-            fetchTimelineEvents();
-          }
+          () => fetchTimelineEvents()
         )
         .subscribe();
 
-      // Set up check-ins real-time subscription
+      timelineSubscriptionRef.current = timelineChannel;
+    }
+
+    // Check-ins subscription
+    if (!checkinsSubscriptionRef.current) {
       const checkinsChannel = supabase
         .channel(`checkins-${selectedEvent.id}`)
         .on(
@@ -115,7 +249,11 @@ export default function Tonight() {
         )
         .subscribe();
 
-      // Set up reactions real-time subscription
+      checkinsSubscriptionRef.current = checkinsChannel;
+    }
+
+    // Reactions subscription
+    if (!reactionsSubscriptionRef.current) {
       const reactionsChannel = supabase
         .channel(`reactions-${selectedEvent.id}`)
         .on(
@@ -129,143 +267,26 @@ export default function Tonight() {
         )
         .subscribe();
 
-      // Store subscription references for cleanup
-      timelineSubscriptionRef.current = timelineChannel;
-      checkinsSubscriptionRef.current = checkinsChannel;
       reactionsSubscriptionRef.current = reactionsChannel;
-
-      const cleanup = subscribeToUpdates();
-      return () => {
-        cleanup();
-        // Unsubscribe from all channels when component unmounts
-        if (timelineSubscriptionRef.current) {
-          timelineSubscriptionRef.current.unsubscribe();
-        }
-        if (checkinsSubscriptionRef.current) {
-          checkinsSubscriptionRef.current.unsubscribe();
-        }
-        if (reactionsSubscriptionRef.current) {
-          reactionsSubscriptionRef.current.unsubscribe();
-        }
-      };
-    }
-  }, [selectedEvent]);
-
-  const fetchTodaysEvents = async () => {
-    const now = new Date();
-    let startTime = new Date();
-    let endTime = new Date();
-
-    if (now.getHours() >= 0 && now.getHours() <= 15) {
-      startTime.setDate(startTime.getDate() - 1);
-      startTime.setHours(18, 0, 0, 0);
-      endTime.setHours(15, 0, 0, 0);
-    } else {
-      startTime.setHours(18, 0, 0, 0);
-      endTime.setDate(endTime.getDate() + 1);
-      endTime.setHours(15, 0, 0, 0);
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from('events')
-        .select('*')
-        .gte('event_date', startTime.toISOString())
-        .lte('event_date', endTime.toISOString())
-        .order('event_date', { ascending: true });
-
-      if (error) throw error;
-
-      setEvents(data || []);
-      if (data?.length > 0) {
-        setSelectedEvent(data[0]);
-      }
-    } catch (error) {
-      console.error('Error fetching events:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
-  const fetchTimelineEvents = async () => {
+  const fetchCheckedInPeople = async () => {
     if (!selectedEvent) return;
+
     try {
       const { data, error } = await supabase
-        .from('timeline_events')
+        .from('checkins')
         .select(
-          ` 
-          *,
-          users ( 
-            id,
+          `
+          id,
+          users (
             first_name,
             last_name,
             avatar_url
           )
         `
         )
-        .eq('event_id', selectedEvent.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      // Fetch reactions for each timeline event in parallel
-      const eventsWithReactions = await Promise.all(
-        data.map(async (event) => {
-          const { data: reactions } = await supabase
-            .from('timeline_event_reactions')
-            .select('reaction')
-            .eq('timeline_event_id', event.id);
-
-          const reactionCounts = reactions?.reduce((acc, curr) => {
-            acc[curr.reaction] = (acc[curr.reaction] || 0) + 1;
-            return acc;
-          }, {});
-
-          return {
-            ...event,
-            reactions: reactionCounts || {},
-            created_at: new Date(event.created_at).getTime(), // Ensure we have a consistent timestamp
-            // Add a unique identifier for more precise comparison
-            uniqueKey: `${event.id}-${event.created_at}`,
-          };
-        })
-      );
-
-      // Sort events by creation time to ensure correct order
-      const sortedEvents = eventsWithReactions.sort(
-        (a, b) => b.created_at - a.created_at
-      );
-
-      // Only update if there are actual changes
-      setTimelineEvents((prevEvents) => {
-        // Add more detailed logging for debugging
-        console.log('Previous Events:', prevEvents);
-        console.log('New Events:', sortedEvents);
-
-        // Use a more robust comparison method
-        const hasChanges =
-          prevEvents.length !== sortedEvents.length ||
-          sortedEvents.some(
-            (newEvent, index) =>
-              !prevEvents[index] ||
-              newEvent.uniqueKey !== prevEvents[index].uniqueKey
-          );
-
-        console.log('Has Changes:', hasChanges);
-
-        return hasChanges ? sortedEvents : prevEvents;
-      });
-    } catch (error) {
-      console.error('Error fetching timeline events:', error);
-    }
-  };
-
-  const fetchCheckedInPeople = async () => {
-    if (!selectedEvent) return;
-    try {
-      const { data, error } = await supabase
-        .from('checkins')
-        .select(` id, users ( first_name, last_name, avatar_url ) `)
         .eq('event_id', selectedEvent.id)
         .order('checked_in_at', { ascending: false });
 
@@ -278,6 +299,7 @@ export default function Tonight() {
 
   const fetchMenuItems = async () => {
     if (!selectedEvent) return;
+
     try {
       const { data, error } = await supabase
         .from('items')
@@ -292,131 +314,10 @@ export default function Tonight() {
     }
   };
 
-  const subscribeToUpdates = () => {
-    if (!selectedEvent) return () => {};
-
-    // Real-time subscription for timeline updates
-    const timelineSubscription = supabase
-      .channel(`timeline-${selectedEvent.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'timeline_events',
-          filter: `event_id=eq.${selectedEvent.id}`,
-        },
-        () => fetchTimelineEvents()
-      )
-      .subscribe();
-
-    return () => {
-      timelineSubscription.unsubscribe();
-    };
-  };
-
-  const handleAddAnnouncement = async (e) => {
-    e.preventDefault();
-    try {
-      const { data, error } = await supabase
-        .from('timeline_events')
-        .insert({
-          event_id: selectedEvent.id,
-          description: announcement,
-          event_type: 'announcement',
-          event_category: 'announcement',
-        })
-        .select(); // Add .select() to return the inserted data
-
-      if (error) throw error;
-
-      console.log('Announcement inserted:', data);
-      setAnnouncement('');
-
-      // Explicitly fetch timeline events after insertion
-      await fetchTimelineEvents();
-    } catch (error) {
-      console.error('Error adding announcement:', error);
-      Alert.alert('Error', 'Failed to add announcement');
-    }
-  };
-
-  const getCurrentDateWithTime = (timeString) => {
-    const today = new Date();
-    const [hours, minutes] = timeString.split(':');
-    today.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-    return today.toISOString();
-  };
-
-  const handleAddSetTime = async (e) => {
-    e.preventDefault();
-    try {
-      const { data, error } = await supabase
-        .from('timeline_events')
-        .insert({
-          event_id: selectedEvent.id,
-          description: setTime.description,
-          event_type: 'set_time',
-          event_category: 'set_time',
-          scheduled_for: setTime.scheduledTime,
-          is_scheduled: true,
-        })
-        .select(); // Add .select() to return the inserted data
-
-      if (error) throw error;
-
-      console.log('Set time inserted:', data);
-      setSetTime({ description: '', scheduledTime: '' });
-
-      // Explicitly fetch timeline events after insertion
-      await fetchTimelineEvents();
-    } catch (error) {
-      console.error('Error adding set time:', error);
-      Alert.alert('Error', 'Failed to add set time');
-    }
-  };
-
-  const handleDeleteTimelineEvent = async (eventId) => {
-    if (window.confirm('Are you sure you want to delete this event?')) {
-      const { error } = await supabase
-        .from('timeline_events')
-        .delete()
-        .eq('id', eventId);
-
-      if (error) {
-        console.error('Error deleting event:', error);
-      } else {
-        fetchTimelineEvents();
-      }
-    }
-  };
-
-  const handleEditTimelineEvent = async (e) => {
-    e.preventDefault();
-    try {
-      const { error } = await supabase
-        .from('timeline_events')
-        .update({
-          description: editingEvent.description,
-          scheduled_for:
-            editingEvent.event_category === 'set_time'
-              ? editingEvent.scheduled_for
-              : null,
-        })
-        .eq('id', editingEvent.id);
-
-      if (error) throw error;
-      setEditingEvent(null);
-      fetchTimelineEvents();
-    } catch (error) {
-      console.error('Error updating event:', error);
-    }
-  };
-
   const measureTimelineHeight = () => {
     if (timelineRef.current) {
       timelineRef.current.measure((x, y, width, height, pageX, pageY) => {
-        const newHeight = height + 100;
+        const newHeight = height + 100; // Add some padding
         Animated.timing(lineHeightAnim, {
           toValue: newHeight,
           duration: 1500,
@@ -426,7 +327,17 @@ export default function Tonight() {
     }
   };
 
-  if (!selectedEvent) {
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color="#FF5252" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!isCheckedIn || !selectedEvent) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centered}>
@@ -441,6 +352,7 @@ export default function Tonight() {
       <View style={styles.header}>
         <Text style={styles.eventName}>{selectedEvent.event_name}</Text>
       </View>
+
       <View style={styles.tabBar}>
         <TouchableOpacity
           style={[styles.tab, activeSection === 'timeline' && styles.activeTab]}
@@ -482,6 +394,7 @@ export default function Tonight() {
           </Text>
         </TouchableOpacity>
       </View>
+
       {activeSection === 'timeline' && (
         <View
           style={styles.timelineWrapper}
@@ -489,23 +402,22 @@ export default function Tonight() {
           onLayout={measureTimelineHeight}
         >
           <TimelineLine height={lineHeightAnim} />
-          <FlatList
-            data={timelineEvents}
-            renderItem={({ item }) => (
+          <ScrollView contentContainerStyle={styles.timelineContainer}>
+            {timelineEvents.map((item) => (
               <TimelineItem
+                key={item.id}
                 item={item}
-                userId={userId}
                 onReactionUpdate={fetchTimelineEvents}
               />
-            )}
-            keyExtractor={(item) => item.id.toString()}
-            contentContainerStyle={styles.timelineContainer}
-          />
+            ))}
+          </ScrollView>
         </View>
       )}
+
       {activeSection === 'people' && (
         <PeopleTab checkedInPeople={checkedInPeople} />
       )}
+
       {activeSection === 'menu' && <MenuTab items={menuItems} />}
     </SafeAreaView>
   );
@@ -563,20 +475,8 @@ const styles = StyleSheet.create({
   timelineWrapper: {
     flex: 1,
     position: 'relative',
-    // paddingBottom: 100,
-  },
-  timelineLine: {
-    position: 'absolute',
-    width: 1,
-    backgroundColor: '#FFFFFF',
-    left: '50%',
-    transform: [{ translateX: -1 }],
-    top: 0,
-    bottom: 0,
   },
   timelineContainer: {
     paddingVertical: 20,
   },
 });
-
-export default Tonight;

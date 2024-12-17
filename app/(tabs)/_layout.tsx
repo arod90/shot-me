@@ -3,10 +3,11 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Platform, Animated, View, StyleSheet } from 'react-native';
+import { Platform, Animated, View, StyleSheet, AppState } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
+import { addHours, subHours, isWithinInterval } from 'date-fns';
 
 export default function TabLayout() {
   const { userId } = useAuth();
@@ -15,43 +16,54 @@ export default function TabLayout() {
   const router = useRouter();
 
   useEffect(() => {
+    // Initial check
     checkUserCheckedIn();
 
     // Set up real-time subscription for check-ins
-    const subscription = supabase
+    const checkinsChannel = supabase
       .channel('checkins-channel')
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'INSERT',
           schema: 'public',
           table: 'checkins',
         },
         (payload) => {
+          console.log('Checkin detected:', payload);
           checkUserCheckedIn();
         }
       )
       .subscribe();
 
     // Set up real-time subscription for userevents updates
-    const usereventsSubscription = supabase
+    const usereventsChannel = supabase
       .channel('userevents-channel')
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'UPDATE',
           schema: 'public',
           table: 'userevents',
         },
         (payload) => {
+          console.log('Userevent update detected:', payload);
           checkUserCheckedIn();
         }
       )
       .subscribe();
 
+    // Add AppState listener for foreground checks
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        checkUserCheckedIn();
+      }
+    });
+
     return () => {
-      subscription.unsubscribe();
-      usereventsSubscription.unsubscribe();
+      checkinsChannel.unsubscribe();
+      usereventsChannel.unsubscribe();
+      subscription.remove();
     };
   }, [userId]);
 
@@ -71,8 +83,6 @@ export default function TabLayout() {
           }),
         ])
       ).start();
-
-      // Navigate to tonight tab when checked in
       router.replace('/(tabs)/tonight');
     }
   }, [isCheckedIn]);
@@ -81,6 +91,7 @@ export default function TabLayout() {
     if (!userId) return;
 
     try {
+      // Get the user's Supabase ID
       const { data: userData, error: userError } = await supabase
         .from('users')
         .select('id')
@@ -92,26 +103,35 @@ export default function TabLayout() {
         return;
       }
 
-      if (userData) {
-        const twelveHoursAgo = new Date();
-        twelveHoursAgo.setHours(twelveHoursAgo.getHours() - 12);
+      const now = new Date();
 
-        const { data: checkin } = await supabase
+      // Get all events
+      const { data: events } = await supabase
+        .from('events')
+        .select('*')
+        .order('event_date', { ascending: true });
+
+      // Find active event
+      const activeEvent = events?.find((event) => {
+        const eventDate = new Date(event.event_date);
+        const eventWindow = {
+          start: subHours(eventDate, 2),
+          end: addHours(eventDate, 36),
+        };
+        return isWithinInterval(now, eventWindow);
+      });
+
+      if (activeEvent) {
+        const { data: checkIn } = await supabase
           .from('checkins')
           .select('*')
           .eq('user_id', userData.id)
-          .gte('checked_in_at', twelveHoursAgo.toISOString())
-          .order('checked_in_at', { ascending: false })
-          .limit(1)
+          .eq('event_id', activeEvent.id)
           .single();
 
-        if (checkin) {
-          console.log('Found active check-in:', checkin);
-          setIsCheckedIn(true);
-        } else {
-          console.log('No active check-in found');
-          setIsCheckedIn(false);
-        }
+        setIsCheckedIn(!!checkIn);
+      } else {
+        setIsCheckedIn(false);
       }
     } catch (error) {
       console.error('Error checking user check-in:', error);
