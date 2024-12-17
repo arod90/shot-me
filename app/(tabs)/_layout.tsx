@@ -6,11 +6,54 @@ import { Ionicons } from '@expo/vector-icons';
 import { Platform, Animated, View, StyleSheet } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '@clerk/clerk-expo';
+import { useRouter } from 'expo-router';
 
 export default function TabLayout() {
   const { userId } = useAuth();
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const router = useRouter();
+
+  useEffect(() => {
+    checkUserCheckedIn();
+
+    // Set up real-time subscription for check-ins
+    const subscription = supabase
+      .channel('checkins-channel')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'checkins',
+        },
+        (payload) => {
+          checkUserCheckedIn();
+        }
+      )
+      .subscribe();
+
+    // Set up real-time subscription for userevents updates
+    const usereventsSubscription = supabase
+      .channel('userevents-channel')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'userevents',
+        },
+        (payload) => {
+          checkUserCheckedIn();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+      usereventsSubscription.unsubscribe();
+    };
+  }, [userId]);
 
   useEffect(() => {
     if (isCheckedIn) {
@@ -28,29 +71,11 @@ export default function TabLayout() {
           }),
         ])
       ).start();
+
+      // Navigate to tonight tab when checked in
+      router.replace('/(tabs)/tonight');
     }
   }, [isCheckedIn]);
-
-  useEffect(() => {
-    checkUserCheckedIn();
-
-    const subscription = supabase
-      .channel('checkins')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'checkins',
-        },
-        () => checkUserCheckedIn()
-      )
-      .subscribe();
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [userId]);
 
   const checkUserCheckedIn = async () => {
     if (!userId) return;
@@ -148,7 +173,6 @@ export default function TabLayout() {
           ),
         }}
       />
-
       <Tabs.Screen
         name="tonight"
         options={{
@@ -161,7 +185,6 @@ export default function TabLayout() {
             ),
         }}
       />
-
       <Tabs.Screen
         name="tickets"
         options={{
@@ -171,7 +194,6 @@ export default function TabLayout() {
           ),
         }}
       />
-
       <Tabs.Screen
         name="profile"
         options={{
