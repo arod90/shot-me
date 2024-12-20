@@ -49,12 +49,18 @@ export default function Tonight() {
   useEffect(() => {
     checkUserCheckedIn();
 
-    const subscription = supabase
+    // Set up subscriptions for both checkins and userevents
+    const checkinSubscription = supabase
       .channel('checkins-channel')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'checkins' },
+        {
+          event: '*',
+          schema: 'public',
+          table: 'checkins',
+        },
         () => {
+          console.log('Checkin change detected');
           checkUserCheckedIn();
         }
       )
@@ -64,40 +70,44 @@ export default function Tonight() {
       .channel('userevents-channel')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'userevents' },
+        {
+          event: '*',
+          schema: 'public',
+          table: 'userevents',
+        },
         () => {
+          console.log('Userevent change detected');
           checkUserCheckedIn();
         }
       )
       .subscribe();
 
     return () => {
-      subscription.unsubscribe();
+      checkinSubscription.unsubscribe();
       usereventsSubscription.unsubscribe();
-      if (timelineSubscriptionRef.current) {
-        timelineSubscriptionRef.current.unsubscribe();
-      }
-      if (checkinsSubscriptionRef.current) {
-        checkinsSubscriptionRef.current.unsubscribe();
-      }
-      if (reactionsSubscriptionRef.current) {
-        reactionsSubscriptionRef.current.unsubscribe();
-      }
     };
   }, [userId]);
 
+  // Add this new useEffect to handle selectedEvent changes
   useEffect(() => {
     if (selectedEvent) {
       fetchTimelineEvents();
       fetchCheckedInPeople();
       fetchMenuItems();
+      setupSubscriptions();
     }
   }, [selectedEvent]);
 
+  // In app/(tabs)/tonight.tsx, update checkUserCheckedIn:
+
   const checkUserCheckedIn = async () => {
-    if (!userId) return;
+    if (!userId) {
+      console.log('No userId found');
+      return;
+    }
 
     try {
+      // Get Supabase user ID from Clerk ID
       const { data: userData, error: userError } = await supabase
         .from('users')
         .select('id')
@@ -109,46 +119,65 @@ export default function Tonight() {
         return;
       }
 
-      const now = new Date();
+      console.log('Found user data:', userData);
 
-      const { data: events } = await supabase
-        .from('events')
-        .select('*')
-        .order('event_date', { ascending: true });
+      // Get all checkins for this user
+      const { data: checkins, error: checkinsError } = await supabase
+        .from('checkins')
+        .select(
+          `
+        *,
+        events (*)
+      `
+        )
+        .eq('user_id', userData.id)
+        .order('checked_in_at', { ascending: false });
 
-      const activeEvent = events?.find((event) => {
-        const eventDate = new Date(event.event_date);
-        const eventWindow = {
-          start: subHours(eventDate, 2),
-          end: addHours(eventDate, 36),
-        };
-        return isWithinInterval(now, eventWindow);
-      });
+      console.log('Found checkins:', checkins);
 
-      if (activeEvent) {
-        const { data: checkIn } = await supabase
-          .from('checkins')
-          .select('*')
-          .eq('user_id', userData.id)
-          .eq('event_id', activeEvent.id)
-          .single();
-
-        if (checkIn) {
-          setIsCheckedIn(true);
-          setSelectedEvent(activeEvent);
-          fetchTimelineEvents();
-          fetchCheckedInPeople();
-          fetchMenuItems();
-        } else {
-          setIsCheckedIn(false);
-          setSelectedEvent(null);
-        }
-      } else {
-        setIsCheckedIn(false);
-        setSelectedEvent(null);
+      if (checkinsError) {
+        console.error('Error fetching checkins:', checkinsError);
+        return;
       }
+
+      if (checkins && checkins.length > 0) {
+        // Look at each checkin
+        for (const checkin of checkins) {
+          const eventDate = new Date(checkin.events.event_date);
+          const now = new Date();
+          const eventWindow = {
+            start: subHours(eventDate, 36),
+            end: addHours(eventDate, 36),
+          };
+
+          console.log('Checking event window:', {
+            eventName: checkin.events.event_name,
+            eventDate: eventDate.toISOString(),
+            windowStart: eventWindow.start.toISOString(),
+            windowEnd: eventWindow.end.toISOString(),
+            currentTime: now.toISOString(),
+            isWithinInterval: isWithinInterval(now, eventWindow),
+          });
+
+          if (isWithinInterval(now, eventWindow)) {
+            console.log('Found valid check-in:', checkin);
+            setIsCheckedIn(true);
+            setSelectedEvent(checkin.events);
+            await Promise.all([
+              fetchTimelineEvents(),
+              fetchCheckedInPeople(),
+              fetchMenuItems(),
+            ]);
+            return;
+          }
+        }
+      }
+
+      console.log('No valid checkins found within time window');
+      setIsCheckedIn(false);
+      setSelectedEvent(null);
     } catch (error) {
-      console.error('Error checking user check-in:', error);
+      console.error('Error in checkUserCheckedIn:', error);
       setIsCheckedIn(false);
       setSelectedEvent(null);
     } finally {
@@ -158,7 +187,6 @@ export default function Tonight() {
 
   const fetchTimelineEvents = async () => {
     if (!selectedEvent) return;
-
     try {
       const { data, error } = await supabase
         .from('timeline_events')
@@ -178,6 +206,7 @@ export default function Tonight() {
 
       if (error) throw error;
 
+      // Process reactions the same way
       const eventsWithReactions = await Promise.all(
         data.map(async (event) => {
           const { data: reactions } = await supabase
@@ -199,10 +228,8 @@ export default function Tonight() {
         })
       );
 
+      console.log('Timeline events fetched:', eventsWithReactions);
       setTimelineEvents(eventsWithReactions);
-
-      // Set up subscriptions for real-time updates
-      setupSubscriptions();
     } catch (error) {
       console.error('Error fetching timeline events:', error);
     }

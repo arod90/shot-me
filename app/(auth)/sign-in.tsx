@@ -42,25 +42,41 @@ export default function SignInScreen() {
     const checkEmail = async () => {
       if (emailAddress.includes('@')) {
         setEmailStatus('checking');
-        const { data: approvedData, error: approvedError } = await supabase
-          .from('approved_emails')
-          .select('email')
-          .eq('email', emailAddress)
-          .single();
+        console.log('Checking email:', emailAddress);
 
-        if (!approvedError && approvedData) {
-          const { data: userData, error: userError } = await supabase
-            .from('users')
+        try {
+          // First check approved_emails table
+          const { data: approvedData, error: approvedError } = await supabase
+            .from('approved_emails')
             .select('email')
-            .eq('email', emailAddress)
+            .eq('email', emailAddress.toLowerCase().trim())
             .single();
 
-          if (!userError && userData) {
-            setEmailStatus('approved');
+          if (!approvedError && approvedData) {
+            // Check users table with exact email match
+            const { data: userData, error: userError } = await supabase
+              .from('users')
+              .select('id, email')
+              .eq('email', emailAddress.toLowerCase().trim())
+              .single();
+
+            console.log('User data check result:', userData, userError);
+
+            if (userData) {
+              console.log('User found, setting status to approved');
+              setEmailStatus('approved');
+            } else {
+              console.log(
+                'User not found, setting status to approved_unregistered'
+              );
+              setEmailStatus('approved_unregistered');
+            }
           } else {
-            setEmailStatus('approved_unregistered');
+            console.log('Email not in approved_emails table');
+            setEmailStatus('');
           }
-        } else {
+        } catch (error) {
+          console.error('Error checking email:', error);
           setEmailStatus('');
         }
       } else {
@@ -101,6 +117,9 @@ export default function SignInScreen() {
     validateForm();
     if (!isLoaded || !isFormValid) return;
 
+    console.log('Email status:', emailStatus);
+    console.log('Attempting sign in for:', emailAddress);
+
     if (emailStatus === 'approved_unregistered') {
       Alert.alert(
         'Cuenta no registrada',
@@ -121,13 +140,14 @@ export default function SignInScreen() {
 
     setIsSubmitting(true);
     try {
+      console.log('Starting sign in process');
       await signOut();
-
+      console.log('Creating sign in attempt');
       const signInAttempt = await signIn.create({
         identifier: emailAddress,
         password,
       });
-
+      console.log('Sign in attempt result:', signInAttempt);
       if (signInAttempt.status === 'complete') {
         await setActive({ session: signInAttempt.createdSessionId });
         await SecureStore.setItemAsync(

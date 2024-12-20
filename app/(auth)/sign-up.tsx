@@ -26,7 +26,7 @@ export default function SignUpScreen() {
   const router = useRouter();
   const emailDebounceTimer = React.useRef(null);
 
-  // Form fields
+  // Form fields state
   const [emailAddress, setEmailAddress] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -43,7 +43,7 @@ export default function SignUpScreen() {
   const [code, setCode] = useState('');
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
 
-  // Touch tracking states
+  // Form validation states
   const [touched, setTouched] = useState({
     email: false,
     password: false,
@@ -52,7 +52,6 @@ export default function SignUpScreen() {
     date: false,
   });
 
-  // Validation states
   const [formValidation, setFormValidation] = useState({
     isEmailValid: false,
     isPasswordValid: false,
@@ -61,7 +60,6 @@ export default function SignUpScreen() {
     isAgeValid: false,
   });
 
-  // Error messages
   const [formErrors, setFormErrors] = useState({
     email: '',
     password: '',
@@ -70,28 +68,17 @@ export default function SignUpScreen() {
     date: '',
   });
 
-  useEffect(() => {
-    return () => {
-      if (emailDebounceTimer.current) {
-        clearTimeout(emailDebounceTimer.current);
-      }
-    };
-  }, []);
-
-  const validateEmail = async (email: string, shouldSetTouched = false) => {
+  // Validation functions
+  const validateEmail = async (email, shouldSetTouched = false) => {
     if (shouldSetTouched) {
       setTouched((prev) => ({ ...prev, email: true }));
     }
 
-    // Don't show any errors while checking
     setIsCheckingEmail(true);
-
     try {
-      // Basic format validation
       if (!email.trim() || !/\S+@\S+\.\S+/.test(email)) {
         setFormValidation((prev) => ({ ...prev, isEmailValid: false }));
-        // Only set error if the field was touched and we're not in the middle of typing
-        if (touched.email && !isCheckingEmail) {
+        if (touched.email) {
           setFormErrors((prev) => ({
             ...prev,
             email: 'El correo electrónico no es válido',
@@ -100,7 +87,6 @@ export default function SignUpScreen() {
         return;
       }
 
-      // Check with server
       const { data } = await supabase
         .from('approved_emails')
         .select('email')
@@ -112,158 +98,189 @@ export default function SignUpScreen() {
         setFormValidation((prev) => ({ ...prev, isEmailValid: true }));
       } else {
         setFormValidation((prev) => ({ ...prev, isEmailValid: false }));
-        // Only show the "not approved" message after server check completes
         setFormErrors((prev) => ({
           ...prev,
           email: 'Este correo electrónico no está aprobado',
         }));
       }
     } catch (error) {
-      setFormValidation((prev) => ({ ...prev, isEmailValid: false }));
-      // Only show error after server check fails
-      setFormErrors((prev) => ({
-        ...prev,
-        email: 'Error al verificar el correo electrónico',
-      }));
+      console.error('Email validation error:', error);
     } finally {
       setIsCheckingEmail(false);
     }
   };
 
-  const handleEmailChange = (text: string) => {
-    setEmailAddress(text);
+  const validatePassword = (value) => {
+    const isValid = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(value);
+    setFormValidation((prev) => ({ ...prev, isPasswordValid: isValid }));
+    if (touched.password) {
+      setFormErrors((prev) => ({
+        ...prev,
+        password: isValid
+          ? ''
+          : 'La contraseña debe tener al menos 8 caracteres, una letra y un número',
+      }));
+    }
+    return isValid;
+  };
 
-    // Clear any existing timer
+  const validatePasswordMatch = (pass, confirm) => {
+    const isMatch = pass === confirm && pass !== '';
+    setFormValidation((prev) => ({ ...prev, isPasswordMatch: isMatch }));
+    if (touched.confirmPassword) {
+      setFormErrors((prev) => ({
+        ...prev,
+        confirmPassword: isMatch ? '' : 'Las contraseñas no coinciden',
+      }));
+    }
+    return isMatch;
+  };
+
+  const validatePhone = (value) => {
+    const isValid = /^0\d{9}$/.test(value);
+    setFormValidation((prev) => ({ ...prev, isPhoneValid: isValid }));
+    if (touched.phone) {
+      setFormErrors((prev) => ({
+        ...prev,
+        phone: isValid ? '' : 'El número debe tener 10 dígitos y empezar con 0',
+      }));
+    }
+    return isValid;
+  };
+
+  const validateAge = (date) => {
+    const today = new Date();
+    const birthDate = new Date(date);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+
+    const isValid = age >= 18;
+    setFormValidation((prev) => ({ ...prev, isAgeValid: isValid }));
+    if (touched.date) {
+      setFormErrors((prev) => ({
+        ...prev,
+        date: isValid ? '' : 'Debes ser mayor de 18 años',
+      }));
+    }
+    return isValid;
+  };
+
+  // Input handlers
+  const handleEmailChange = (text) => {
+    setEmailAddress(text);
     if (emailDebounceTimer.current) {
       clearTimeout(emailDebounceTimer.current);
     }
-
-    // Clear errors while typing
-    setFormErrors((prev) => ({ ...prev, email: '' }));
-
-    // Set a new timer for validation
-    // @ts-ignore
     emailDebounceTimer.current = setTimeout(() => {
       validateEmail(text, true);
     }, 1500);
   };
 
-  const validatePassword = (value: string) => {
-    if (!touched.password) return;
-    const isValid = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(value);
-    setFormValidation((prev) => ({ ...prev, isPasswordValid: isValid }));
-    setFormErrors((prev) => ({
-      ...prev,
-      password: isValid
-        ? ''
-        : 'La contraseña debe tener al menos 8 caracteres, una letra y un número',
-    }));
-    validatePasswordMatch(value, confirmPassword);
-  };
-
-  const validatePasswordMatch = (pass: string, confirm: string) => {
-    if (!touched.confirmPassword) return;
-    const isMatch = pass === confirm && pass !== '';
-    setFormValidation((prev) => ({ ...prev, isPasswordMatch: isMatch }));
-    setFormErrors((prev) => ({
-      ...prev,
-      confirmPassword: isMatch ? '' : 'Las contraseñas no coinciden',
-    }));
-  };
-
-  const validatePhone = (value: string) => {
-    if (!touched.phone) return;
-    const isValid = /^0\d{9}$/.test(value);
-    setFormValidation((prev) => ({ ...prev, isPhoneValid: isValid }));
-    setFormErrors((prev) => ({
-      ...prev,
-      phone: isValid ? '' : 'El número debe tener 10 dígitos y empezar con 0',
-    }));
-  };
-
-  const validateAge = (date: Date) => {
-    if (!touched.date) return;
-    const age = new Date().getFullYear() - date.getFullYear();
-    const isValid = age >= 18;
-    setFormValidation((prev) => ({ ...prev, isAgeValid: isValid }));
-    setFormErrors((prev) => ({
-      ...prev,
-      date: isValid ? '' : 'Debes ser mayor de 18 años',
-    }));
-    return isValid;
-  };
-
-  const handleInputBlur = (field: keyof typeof touched) => {
-    setTouched((prev) => ({ ...prev, [field]: true }));
-
-    switch (field) {
-      case 'email':
-        validateEmail(emailAddress, true);
-        break;
-      case 'password':
-        validatePassword(password);
-        break;
-      case 'confirmPassword':
-        validatePasswordMatch(password, confirmPassword);
-        break;
-      case 'phone':
-        validatePhone(phone);
-        break;
-      case 'date':
-        validateAge(dateOfBirth);
-        break;
+  const handlePasswordChange = (text) => {
+    setPassword(text);
+    setTouched((prev) => ({ ...prev, password: true }));
+    validatePassword(text);
+    if (confirmPassword) {
+      validatePasswordMatch(text, confirmPassword);
     }
   };
 
+  const handleConfirmPasswordChange = (text) => {
+    setConfirmPassword(text);
+    setTouched((prev) => ({ ...prev, confirmPassword: true }));
+    validatePasswordMatch(password, text);
+  };
+
+  const handlePhoneChange = (text) => {
+    setPhone(text);
+    setTouched((prev) => ({ ...prev, phone: true }));
+    validatePhone(text);
+  };
+
+  const handleDateConfirm = (date) => {
+    setDatePickerVisibility(false);
+    setDateOfBirth(date);
+    setTouched((prev) => ({ ...prev, date: true }));
+    validateAge(date);
+  };
+
   const isFormValid = () => {
-    return (
-      Object.values(formValidation).every((value) => value === true) &&
-      firstName.trim() !== '' &&
-      lastName.trim() !== ''
+    const validations = Object.values(formValidation).every(
+      (value) => value === true
     );
+    const namesValid = firstName.trim() !== '' && lastName.trim() !== '';
+    return validations && namesValid;
   };
 
   const handleSignUp = async () => {
-    if (!isLoaded || !isFormValid()) return;
+    if (!isLoaded || !isFormValid()) {
+      return;
+    }
 
     try {
-      await signUp.create({
+      // Only send Clerk what it needs for authentication
+      console.log('Creating user authentication...');
+      const signUpAttempt = await signUp.create({
         emailAddress,
         password,
       });
+
+      // Proceed with email verification
       await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
       setPendingVerification(true);
     } catch (err) {
-      Alert.alert(
-        'Error',
-        'Error al registrarse. Por favor, inténtalo de nuevo.'
-      );
+      console.error('Signup error:', err);
+
+      let errorMessage = 'Error al registrarse. ';
+      if (err.errors?.[0]?.code === 'form_identifier_exists') {
+        errorMessage += 'Este correo electrónico ya está registrado.';
+      }
+
+      Alert.alert('Error', errorMessage);
     }
   };
 
   const handleVerification = async () => {
     if (!isLoaded || !code) return;
+
     try {
       const result = await signUp.attemptEmailAddressVerification({ code });
+
       if (result.status === 'complete') {
-        await setActive({ session: result.createdSessionId });
-        const { error } = await supabase.from('users').insert([
-          {
+        // First create the user in Supabase
+        const { data: newUser, error: createError } = await supabase
+          .from('users')
+          .insert({
             clerk_id: result.createdUserId,
             email: emailAddress,
             first_name: firstName,
             last_name: lastName,
             date_of_birth: dateOfBirth.toISOString().split('T')[0],
             phone,
-          },
-        ]);
-        if (error) throw error;
-        // @ts-ignore
+          })
+          .select()
+          .single();
+
+        if (createError) {
+          console.error('Error creating user in Supabase:', createError);
+          throw createError;
+        }
+
+        // Then set the active session
+        await setActive({ session: result.createdSessionId });
+
+        // Store the session token
         await SecureStore.setItemAsync('userToken', result.createdSessionId);
+
+        // Navigate to home
         router.replace('/(tabs)');
       }
     } catch (err) {
-      Alert.alert('Error', 'Error en la verificación');
+      console.error('Error in verification:', err);
+      Alert.alert('Error', 'Error in verification');
     }
   };
 
@@ -307,7 +324,6 @@ export default function SignUpScreen() {
                   ]}
                   value={emailAddress}
                   onChangeText={handleEmailChange}
-                  onBlur={() => validateEmail(emailAddress, true)}
                   placeholder="Email"
                   placeholderTextColor="#666"
                   keyboardType="email-address"
@@ -328,11 +344,7 @@ export default function SignUpScreen() {
                   <TextInput
                     style={[styles.input, styles.passwordInput]}
                     value={password}
-                    onChangeText={(text) => {
-                      setPassword(text);
-                      validatePassword(text);
-                    }}
-                    onBlur={() => handleInputBlur('password')}
+                    onChangeText={handlePasswordChange}
                     placeholder="Contraseña"
                     placeholderTextColor="#666"
                     secureTextEntry={!showPassword}
@@ -360,11 +372,7 @@ export default function SignUpScreen() {
                   <TextInput
                     style={[styles.input, styles.passwordInput]}
                     value={confirmPassword}
-                    onChangeText={(text) => {
-                      setConfirmPassword(text);
-                      validatePasswordMatch(password, text);
-                    }}
-                    onBlur={() => handleInputBlur('confirmPassword')}
+                    onChangeText={handleConfirmPasswordChange}
                     placeholder="Confirmar Contraseña"
                     placeholderTextColor="#666"
                     secureTextEntry={!showConfirmPassword}
@@ -426,11 +434,7 @@ export default function SignUpScreen() {
               <DateTimePickerModal
                 isVisible={isDatePickerVisible}
                 mode="date"
-                onConfirm={(date) => {
-                  setDateOfBirth(date);
-                  validateAge(date);
-                  setDatePickerVisibility(false);
-                }}
+                onConfirm={handleDateConfirm}
                 onCancel={() => setDatePickerVisibility(false)}
                 maximumDate={new Date()}
               />
@@ -440,11 +444,7 @@ export default function SignUpScreen() {
                 <TextInput
                   style={styles.input}
                   value={phone}
-                  onChangeText={(text) => {
-                    setPhone(text);
-                    validatePhone(text);
-                  }}
-                  onBlur={() => handleInputBlur('phone')}
+                  onChangeText={handlePhoneChange}
                   placeholder="0999999999"
                   placeholderTextColor="#666"
                   keyboardType="numeric"
@@ -528,6 +528,7 @@ const styles = StyleSheet.create({
     padding: 12,
     color: 'white',
     fontSize: 16,
+    borderWidth: 0,
   },
   eyeIcon: {
     padding: 10,

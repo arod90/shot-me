@@ -1,19 +1,145 @@
 // @ts-nocheck
-'use client';
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Animated,
+  Platform,
+  AppState,
+} from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Platform, Animated, View, StyleSheet, AppState } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '@clerk/clerk-expo';
 import { useRouter } from 'expo-router';
 import { addHours, subHours, isWithinInterval } from 'date-fns';
+
+const TabIcon = ({ color, size, isCheckedIn, pulseAnim }) => (
+  <View style={styles.iconContainer}>
+    {isCheckedIn ? (
+      <>
+        <Ionicons name="flame" size={size} color={color} />
+        <View style={styles.dot} />
+        <Animated.View
+          style={[
+            styles.pulseDot,
+            {
+              transform: [{ scale: pulseAnim }],
+              opacity: pulseAnim.interpolate({
+                inputRange: [1, 2],
+                outputRange: [1, 0],
+              }),
+            },
+          ]}
+        />
+      </>
+    ) : (
+      <Ionicons name="moon" size={size} color={color} />
+    )}
+  </View>
+);
 
 export default function TabLayout() {
   const { userId } = useAuth();
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const router = useRouter();
+
+  const checkUserCheckedIn = async () => {
+    if (!userId) {
+      console.log('No userId found');
+      return;
+    }
+
+    try {
+      // Get Supabase user ID from Clerk ID
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('clerk_id', userId)
+        .single();
+
+      if (userError) {
+        console.error('Error fetching user:', userError);
+        return;
+      }
+
+      console.log('Found user data:', userData);
+
+      // Get all checkins for this user
+      const { data: checkins, error: checkinsError } = await supabase
+        .from('checkins')
+        .select(
+          `
+          *,
+          events (*)
+        `
+        )
+        .eq('user_id', userData.id)
+        .order('checked_in_at', { ascending: false });
+
+      console.log('Found checkins:', checkins);
+
+      if (checkinsError) {
+        console.error('Error fetching checkins:', checkinsError);
+        return;
+      }
+
+      if (checkins && checkins.length > 0) {
+        // Look at each checkin
+        for (const checkin of checkins) {
+          const eventDate = new Date(checkin.events.event_date);
+          const now = new Date();
+          const eventWindow = {
+            start: subHours(eventDate, 36), // More lenient for testing
+            end: addHours(eventDate, 36),
+          };
+
+          console.log('Checking event window:', {
+            eventName: checkin.events.event_name,
+            eventDate: eventDate.toISOString(),
+            windowStart: eventWindow.start.toISOString(),
+            windowEnd: eventWindow.end.toISOString(),
+            currentTime: now.toISOString(),
+            isWithinInterval: isWithinInterval(now, eventWindow),
+          });
+
+          if (isWithinInterval(now, eventWindow)) {
+            console.log('Found valid check-in:', checkin);
+            setIsCheckedIn(true);
+            return;
+          }
+        }
+      }
+
+      console.log('No valid checkins found within time window');
+      setIsCheckedIn(false);
+    } catch (error) {
+      console.error('Error in checkUserCheckedIn:', error);
+      setIsCheckedIn(false);
+    }
+  };
+
+  // Animation effect for pulse
+  useEffect(() => {
+    if (isCheckedIn) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 2,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 0,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    }
+  }, [isCheckedIn]);
 
   useEffect(() => {
     // Initial check
@@ -67,97 +193,6 @@ export default function TabLayout() {
     };
   }, [userId]);
 
-  useEffect(() => {
-    if (isCheckedIn) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 2,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 0,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-      router.replace('/(tabs)/tonight');
-    }
-  }, [isCheckedIn]);
-
-  const checkUserCheckedIn = async () => {
-    if (!userId) return;
-
-    try {
-      // Get the user's Supabase ID
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('clerk_id', userId)
-        .single();
-
-      if (userError) {
-        console.error('Error fetching user:', userError);
-        return;
-      }
-
-      const now = new Date();
-
-      // Get all events
-      const { data: events } = await supabase
-        .from('events')
-        .select('*')
-        .order('event_date', { ascending: true });
-
-      // Find active event
-      const activeEvent = events?.find((event) => {
-        const eventDate = new Date(event.event_date);
-        const eventWindow = {
-          start: subHours(eventDate, 2),
-          end: addHours(eventDate, 36),
-        };
-        return isWithinInterval(now, eventWindow);
-      });
-
-      if (activeEvent) {
-        const { data: checkIn } = await supabase
-          .from('checkins')
-          .select('*')
-          .eq('user_id', userData.id)
-          .eq('event_id', activeEvent.id)
-          .single();
-
-        setIsCheckedIn(!!checkIn);
-      } else {
-        setIsCheckedIn(false);
-      }
-    } catch (error) {
-      console.error('Error checking user check-in:', error);
-      setIsCheckedIn(false);
-    }
-  };
-
-  const TabIcon = ({ color, size }) => (
-    <View style={styles.iconContainer}>
-      <Ionicons name="flame" size={size} color={color} />
-      <View style={styles.dot} />
-      <Animated.View
-        style={[
-          styles.pulseDot,
-          {
-            transform: [{ scale: pulseAnim }],
-            opacity: pulseAnim.interpolate({
-              inputRange: [1, 2],
-              outputRange: [1, 0],
-            }),
-          },
-        ]}
-      />
-    </View>
-  );
-
   return (
     <Tabs
       screenOptions={{
@@ -197,12 +232,14 @@ export default function TabLayout() {
         name="tonight"
         options={{
           title: 'Tonight',
-          tabBarIcon: ({ color, size }) =>
-            isCheckedIn ? (
-              <TabIcon color={color} size={size} />
-            ) : (
-              <Ionicons name="moon" size={size} color={color} />
-            ),
+          tabBarIcon: ({ color, size }) => (
+            <TabIcon
+              color={color}
+              size={size}
+              isCheckedIn={isCheckedIn}
+              pulseAnim={pulseAnim}
+            />
+          ),
         }}
       />
       <Tabs.Screen
